@@ -76,17 +76,30 @@ h1 {
 
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
 <script>
 
-// 🔑 REPLACE THESE WITH YOUR SUPABASE KEYS
-const SUPABASE_URL = "YOUR_SUPABASE_URL";
-const SUPABASE_KEY = "YOUR_ANON_KEY";
+const SUPABASE_URL = "https://wuhklqulwhioiynoadtj.supabase.co";
+const SUPABASE_KEY = "Ysb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx";
 
-const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
+let client;
 let tasks = [];
 
+// ✅ Wait until page + Supabase are loaded
+window.onload = async function () {
+
+    client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    await loadTasks();
+};
+
 async function addTask() {
+
+    if (!client) {
+        alert("App not ready yet. Refresh page.");
+        return;
+    }
 
     let title = document.getElementById("taskTitle").value;
     let dueDate = document.getElementById("dueDate").value;
@@ -95,7 +108,6 @@ async function addTask() {
 
     if (!title || !dueDate || !time) return;
 
-    // Save to Supabase
     await client.from("tasks").insert([
         {
             title: title,
@@ -105,41 +117,10 @@ async function addTask() {
         }
     ]);
 
-    // Reload tasks
     await loadTasks();
 
     document.getElementById("taskTitle").value = "";
     document.getElementById("timeEstimate").value = "";
-}
-
-function splitIntoSteps(index) {
-
-    let total = tasks[index].time_estimate;
-    let steps = [];
-
-    while (total > 0) {
-        let step = Math.min(15, total);
-        steps.push(step);
-        total -= step;
-    }
-
-    tasks[index].subtasks = steps;
-    renderTasks();
-}
-
-function sortTasks() {
-
-    tasks.sort((a, b) => {
-
-        let dateA = new Date(a.due_date);
-        let dateB = new Date(b.due_date);
-
-        if (dateA.getTime() !== dateB.getTime()) {
-            return dateA - dateB;
-        }
-
-        return b.importance - a.importance;
-    });
 }
 
 async function loadTasks() {
@@ -150,10 +131,10 @@ async function loadTasks() {
 
     if (error) {
         console.error(error);
+        alert("Error loading tasks");
         return;
     }
 
-    // Map DB fields to match your app
     tasks = data.map(t => ({
         id: t.id,
         title: t.title,
@@ -165,6 +146,19 @@ async function loadTasks() {
 
     sortTasks();
     renderTasks();
+}
+
+function sortTasks() {
+    tasks.sort((a, b) => {
+        let dateA = new Date(a.due_date);
+        let dateB = new Date(b.due_date);
+
+        if (dateA.getTime() !== dateB.getTime()) {
+            return dateA - dateB;
+        }
+
+        return b.importance - a.importance;
+    });
 }
 
 function renderTasks() {
@@ -193,8 +187,20 @@ function renderTasks() {
     });
 }
 
-// Load tasks when page opens
-loadTasks();
+function splitIntoSteps(index) {
+
+    let total = tasks[index].time_estimate;
+    let steps = [];
+
+    while (total > 0) {
+        let step = Math.min(15, total);
+        steps.push(step);
+        total -= step;
+    }
+
+    tasks[index].subtasks = steps;
+    renderTasks();
+}
 
 </script>
 
