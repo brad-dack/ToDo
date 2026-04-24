@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Task Priority Planner</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f6f8;
+    padding: 20px;
+}
+
+.container {
+    max-width: 700px;
+    margin: auto;
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+}
+
+input, button {
+    width: 100%;
+    padding: 10px;
+    margin-top: 10px;
+    font-size: 15px;
+}
+
+button {
+    background: #2b7cff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.task {
+    border: 1px solid #ddd;
+    padding: 12px;
+    border-radius: 8px;
+    margin-top: 15px;
+}
+
+.subtask {
+    margin-left: 10px;
+}
+
+h1 {
+    text-align: center;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>Task Planner</h1>
+
+<input type="text" id="taskTitle" placeholder="Enter task name">
+
+<label>Due Date</label>
+<input type="date" id="dueDate">
+
+<label>Importance (0 – 10)</label>
+<input type="number" id="importance" min="0" max="10">
+
+<label>Time Estimate (minutes)</label>
+<input type="number" id="timeEstimate">
+
+<button onclick="addTask()">Add Task</button>
+
+<div id="taskList"></div>
+
+</div>
+
+<script>
+
+// 🔑 REPLACE THESE WITH YOUR SUPABASE KEYS
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_KEY = "YOUR_ANON_KEY";
+
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let tasks = [];
+
+async function addTask() {
+
+    let title = document.getElementById("taskTitle").value;
+    let dueDate = document.getElementById("dueDate").value;
+    let importance = parseInt(document.getElementById("importance").value);
+    let time = parseInt(document.getElementById("timeEstimate").value);
+
+    if (!title || !dueDate || !time) return;
+
+    // Save to Supabase
+    await client.from("tasks").insert([
+        {
+            title: title,
+            due_date: dueDate,
+            importance: importance,
+            time_estimate: time
+        }
+    ]);
+
+    // Reload tasks
+    await loadTasks();
+
+    document.getElementById("taskTitle").value = "";
+    document.getElementById("timeEstimate").value = "";
+}
+
+function splitIntoSteps(index) {
+
+    let total = tasks[index].time_estimate;
+    let steps = [];
+
+    while (total > 0) {
+        let step = Math.min(15, total);
+        steps.push(step);
+        total -= step;
+    }
+
+    tasks[index].subtasks = steps;
+    renderTasks();
+}
+
+function sortTasks() {
+
+    tasks.sort((a, b) => {
+
+        let dateA = new Date(a.due_date);
+        let dateB = new Date(b.due_date);
+
+        if (dateA.getTime() !== dateB.getTime()) {
+            return dateA - dateB;
+        }
+
+        return b.importance - a.importance;
+    });
+}
+
+async function loadTasks() {
+
+    let { data, error } = await client
+        .from("tasks")
+        .select("*");
+
+    if (error) {
+        console.error(error);
+        return;
+    }
+
+    // Map DB fields to match your app
+    tasks = data.map(t => ({
+        id: t.id,
+        title: t.title,
+        due_date: t.due_date,
+        importance: t.importance,
+        time_estimate: t.time_estimate,
+        subtasks: []
+    }));
+
+    sortTasks();
+    renderTasks();
+}
+
+function renderTasks() {
+
+    let list = document.getElementById("taskList");
+    list.innerHTML = "";
+
+    tasks.forEach((task, index) => {
+
+        let box = document.createElement("div");
+        box.className = "task";
+
+        let html = "<strong>" + task.title + "</strong><br>";
+        html += "Due: " + task.due_date + "<br>";
+        html += "Importance: " + task.importance + "<br>";
+        html += "Time: " + task.time_estimate + " mins<br><br>";
+
+        html += "<button onclick='splitIntoSteps(" + index + ")'>Break into 15-minute steps</button><br>";
+
+        task.subtasks.forEach(step => {
+            html += "<div class='subtask'>• Work for " + step + " minutes</div>";
+        });
+
+        box.innerHTML = html;
+        list.appendChild(box);
+    });
+}
+
+// Load tasks when page opens
+loadTasks();
+
+</script>
+
+</body>
+</html>
