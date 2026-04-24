@@ -25,7 +25,6 @@ input, button {
     width: 100%;
     padding: 10px;
     margin-top: 10px;
-    font-size: 15px;
 }
 
 button {
@@ -33,18 +32,13 @@ button {
     color: white;
     border: none;
     border-radius: 6px;
-    cursor: pointer;
 }
 
 .task {
     border: 1px solid #ddd;
     padding: 12px;
     border-radius: 8px;
-    margin-top: 15px;
-}
-
-h1 {
-    text-align: center;
+    margin-top: 10px;
 }
 
 .hidden {
@@ -59,78 +53,62 @@ h1 {
 
 <h1>Task Planner</h1>
 
-<!-- CREATE TASK -->
+<!-- CREATE -->
 <div id="createScreen">
-    <input type="text" id="taskTitle" placeholder="Task title">
-
-    <label>Due Date</label>
+    <input id="taskTitle" placeholder="Task title">
     <input type="date" id="dueDate">
-
-    <label>Importance (0–10)</label>
-    <input type="number" id="importance" min="0" max="10">
-
-    <label>Time Estimate (minutes)</label>
-    <input type="number" id="timeEstimate">
-
+    <input type="number" id="importance" placeholder="Importance (0–10)">
+    <input type="number" id="timeEstimate" placeholder="Time (minutes)">
     <button onclick="addTask()">Add Task</button>
 </div>
 
-<!-- BREAKDOWN SCREEN -->
+<!-- BREAKDOWN -->
 <div id="breakdownScreen" class="hidden">
-
-    <h3>Break Task into Steps</h3>
-
+    <h3>Break into Steps</h3>
     <div id="breakdownList"></div>
-
-    <button onclick="saveSubtasks()">Save Steps</button>
+    <button onclick="saveSubtasks()">Save</button>
 </div>
 
-<!-- TASK LIST -->
-<h3 style="margin-top:30px;">Your Tasks</h3>
+<h3>Your Tasks</h3>
 <div id="taskList"></div>
 
 </div>
 
 <script>
 
-// 🔑 ADD YOUR KEYS HERE
-const SUPABASE_URL = "https://wuhklqulwhioiynoadtj.supabase.co";
-const SUPABASE_KEY = "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx";
+const SUPABASE_URL = "YOUR_URL";
+const SUPABASE_KEY = "YOUR_KEY";
 
 let client;
 let tasks = [];
-let currentTask = null;
-let currentTaskId = null;
+let currentTask;
+let currentTaskId;
 
-window.onload = async function () {
+window.onload = async () => {
     client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    await loadAllTasks();
+    await loadTasks();
 };
 
-// ADD TASK (parent)
+// FORMAT DATE → DD/MM/YY
+function formatDate(dateStr) {
+    let d = new Date(dateStr);
+    let day = String(d.getDate()).padStart(2, '0');
+    let month = String(d.getMonth()+1).padStart(2, '0');
+    let year = String(d.getFullYear()).slice(-2);
+    return `${day}/${month}/${year}`;
+}
+
+// ADD TASK
 async function addTask() {
 
-    let title = document.getElementById("taskTitle").value;
-    let dueDate = document.getElementById("dueDate").value;
-    let importance = parseInt(document.getElementById("importance").value);
-    let time = parseInt(document.getElementById("timeEstimate").value);
+    let title = taskTitle.value;
+    let dueDate = dueDateInput.value;
+    let importance = parseInt(importanceInput.value);
+    let time = parseInt(timeEstimate.value);
 
-    if (!title || !dueDate || !time) return;
-
-    let { data, error } = await client.from("tasks")
-        .insert([{
-            title: title,
-            due_date: dueDate,
-            importance: importance,
-            time_estimate: time
-        }])
+    let { data } = await client.from("tasks")
+        .insert([{ title, due_date: dueDate, importance, time_estimate: time }])
         .select();
-
-    if (error) {
-        alert("Error saving task");
-        console.error(error);
-        return;
-    }
 
     currentTask = data[0];
     currentTaskId = currentTask.id;
@@ -138,14 +116,13 @@ async function addTask() {
     showBreakdown(currentTask);
 }
 
-// SHOW BREAKDOWN UI
+// SHOW BREAKDOWN
 function showBreakdown(task) {
 
-    document.getElementById("createScreen").classList.add("hidden");
-    document.getElementById("breakdownScreen").classList.remove("hidden");
+    createScreen.classList.add("hidden");
+    breakdownScreen.classList.remove("hidden");
 
-    let list = document.getElementById("breakdownList");
-    list.innerHTML = "";
+    breakdownList.innerHTML = "";
 
     let total = task.time_estimate;
 
@@ -157,10 +134,11 @@ function showBreakdown(task) {
 
         div.innerHTML = `
             <input type="text" value="Work on ${task.title}">
-            <span> (${step} min)</span>
+            <input type="date" value="${task.due_date}">
+            <span>${step} min</span>
         `;
 
-        list.appendChild(div);
+        breakdownList.appendChild(div);
 
         total -= step;
     }
@@ -169,94 +147,79 @@ function showBreakdown(task) {
 // SAVE SUBTASKS
 async function saveSubtasks() {
 
-    let list = document.getElementById("breakdownList").children;
-
+    let items = breakdownList.children;
     let inserts = [];
 
-    for (let item of list) {
+    for (let item of items) {
 
-        let input = item.querySelector("input");
-        let duration = parseInt(item.textContent.match(/\((\d+)/)[1]);
+        let inputs = item.querySelectorAll("input");
 
         inserts.push({
             parent_id: currentTaskId,
-            title: input.value,
-            duration: duration,
-            importance: currentTask.importance,
-            due_date: currentTask.due_date
+            title: inputs[0].value,
+            due_date: inputs[1].value,
+            duration: parseInt(item.textContent),
+            importance: currentTask.importance
         });
     }
 
-    let { error } = await client.from("subtasks").insert(inserts);
+    await client.from("subtasks").insert(inserts);
 
-    if (error) {
-        alert("Error saving subtasks");
-        console.error(error);
-        return;
-    }
+    breakdownScreen.classList.add("hidden");
+    createScreen.classList.remove("hidden");
 
-    // reset UI
-    document.getElementById("breakdownScreen").classList.add("hidden");
-    document.getElementById("createScreen").classList.remove("hidden");
-
-    document.getElementById("taskTitle").value = "";
-    document.getElementById("timeEstimate").value = "";
-
-    await loadAllTasks();
+    await loadTasks();
 }
 
-// LOAD SUBTASKS (MAIN LIST)
-async function loadAllTasks() {
+// LOAD TASKS
+async function loadTasks() {
 
-    let { data, error } = await client
+    let { data } = await client
         .from("subtasks")
-        .select("*");
-
-    if (error) {
-        console.error(error);
-        return;
-    }
+        .select("*")
+        .eq("completed", false);
 
     tasks = data;
 
-    sortTasks();
+    tasks.sort((a,b) => {
+        let d1 = new Date(a.due_date);
+        let d2 = new Date(b.due_date);
+
+        if (d1 - d2 !== 0) return d1 - d2;
+        return b.importance - a.importance;
+    });
+
     renderTasks();
 }
 
-// SORT
-function sortTasks() {
-    tasks.sort((a, b) => {
+// COMPLETE TASK
+async function completeTask(id) {
+    await client.from("subtasks")
+        .update({ completed: true })
+        .eq("id", id);
 
-        let dateA = new Date(a.due_date);
-        let dateB = new Date(b.due_date);
-
-        if (dateA.getTime() !== dateB.getTime()) {
-            return dateA - dateB;
-        }
-
-        return b.importance - a.importance;
-    });
+    await loadTasks();
 }
 
 // RENDER
 function renderTasks() {
 
-    let list = document.getElementById("taskList");
-    list.innerHTML = "";
+    taskList.innerHTML = "";
 
-    tasks.forEach(task => {
+    tasks.forEach(t => {
 
-        let box = document.createElement("div");
-        box.className = "task";
+        let div = document.createElement("div");
+        div.className = "task";
 
-        box.innerHTML = `
-            <strong>${task.title}</strong><br>
-            Due: ${task.due_date}<br>
-            Importance: ${task.importance}<br>
-            Duration: ${task.duration} min
+        div.innerHTML = `
+            <input type="checkbox" onclick="completeTask('${t.id}')">
+            <strong>${t.title}</strong><br>
+            Due: ${formatDate(t.due_date)}<br>
+            Importance: ${t.importance}<br>
+            ${t.duration} min
         `;
 
-        list.appendChild(box);
+        taskList.appendChild(div);
     });
 }
 
