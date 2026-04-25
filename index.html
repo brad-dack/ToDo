@@ -3,83 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ActionStream | 15m GTD</title>
+    <title>ActionStream | GTD Precision</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <style>
-        :root { --bg: #f0f2f5; --card: #ffffff; --primary: #0f172a; --accent: #3b82f6; --text: #334155; }
-        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 600px; padding: 40px 20px; }
+        :root { --bg: #f8fafc; --card: #ffffff; --primary: #0f172a; --accent: #2563eb; --text: #1e293b; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding-bottom: 50px; }
+        .container { width: 100%; max-width: 700px; margin: auto; padding: 20px; }
         
         #spotlight {
-            background: var(--primary); color: white; padding: 40px; border-radius: 24px; 
-            margin-bottom: 30px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
-            border: 1px solid rgba(255,255,255,0.1);
+            background: var(--primary); color: white; padding: 35px; border-radius: 24px; 
+            margin-bottom: 25px; text-align: center; box-shadow: 0 15px 30px -5px rgba(0,0,0,0.2);
         }
-        .spotlight-task { font-size: 1.6rem; font-weight: 700; margin: 15px 0; color: #fff; }
+        .spotlight-task { font-size: 1.8rem; font-weight: 800; margin: 10px 0; line-height: 1.2; }
         
-        .card { background: var(--card); padding: 25px; border-radius: 16px; border: 1px solid #e2e8f0; margin-bottom: 25px; }
+        .card { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
         
-        .input-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-        input, select, button { padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 14px; flex: 1; }
-        
-        button { background: var(--accent); color: white; font-weight: 600; border: none; cursor: pointer; min-width: 120px; }
-        button.add-step { background: #10b981; }
-        button.finish { background: #64748b; }
-        button.complete { background: #fff; color: var(--primary); margin-top: 15px; width: 100%; }
+        input, select, button { padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 14px; width: 100%; box-sizing: border-box; }
+        button { background: var(--accent); color: white; font-weight: 600; border: none; cursor: pointer; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+        button.undo { background: #64748b; font-size: 0.75rem; padding: 5px 10px; width: auto; }
+        button.complete-btn { background: #fff; color: var(--primary); margin-top: 15px; font-size: 1.1rem; }
 
-        .task-list { margin-top: 20px; }
         .task-item { 
-            display: flex; align-items: center; padding: 16px; background: white; 
-            border-radius: 12px; margin-bottom: 8px; border: 1px solid #e2e8f0;
+            display: flex; align-items: center; padding: 14px; background: white; 
+            border-radius: 12px; margin-bottom: 8px; border: 1px solid #e2e8f0; border-left: 6px solid #cbd5e1;
         }
+        .priority-high { border-left-color: #ef4444; }
         .task-info { flex: 1; }
-        .task-meta { font-size: 0.75rem; color: #94a3b8; }
-        .importance-tag { 
-            font-weight: 800; padding: 2px 8px; border-radius: 4px; 
-            background: #fee2e2; color: #ef4444; margin-right: 8px;
-        }
+        .task-meta { font-size: 0.75rem; color: #64748b; margin-top: 4px; }
+        .history-item { opacity: 0.6; display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #eee; }
         .hidden { display: none; }
-        .warning { color: #ef4444; font-size: 0.8rem; margin-top: -5px; margin-bottom: 10px; font-weight: 600; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div id="spotlight">
-        <div style="font-size: 0.8rem; text-transform: uppercase; opacity: 0.6; letter-spacing: 1px;">Top Action Priority</div>
-        <div id="spotlightTitle" class="spotlight-task">No actions available.</div>
-        <div id="spotlightDetails" style="font-size: 0.85rem; opacity: 0.8;">Add a task to begin.</div>
-        <button class="complete" onclick="completeSpotlight()">Mark Completed</button>
+        <div style="font-size: 0.75rem; text-transform: uppercase; opacity: 0.6; letter-spacing: 1.5px;">Next Action</div>
+        <div id="spotlightTitle" class="spotlight-task">...</div>
+        <div id="spotlightDetails" style="font-size: 0.85rem; opacity: 0.8;"></div>
+        <button class="complete-btn" onclick="completeSpotlight()">Done</button>
     </div>
 
-    <div class="card" id="processingCard">
-        <h2 id="flowHeader" style="font-size: 1rem; margin-bottom:15px;">Capture New Concept</h2>
+    <div class="card">
+        <div class="grid" style="grid-template-columns: 2fr 1fr;">
+            <input id="mainGoal" placeholder="Primary Goal/Project">
+            <input type="date" id="goalDate">
+        </div>
         
-        <input id="currentTitle" placeholder="What is the goal/project?" style="width:100%; margin-bottom:10px;">
-        
-        <div id="stepInputs">
-            <div class="input-row">
-                <input id="stepTitle" placeholder="Physical step (e.g., 'Draft email')">
-            </div>
-            <div class="input-row">
+        <div style="background: #f1f5f9; padding: 15px; border-radius: 10px; margin-top: 10px;">
+            <input id="stepTitle" placeholder="Physical Action (e.g. 'Draft email')" style="margin-bottom:10px;">
+            <div class="grid">
                 <input type="date" id="stepDate">
-                <input type="number" id="stepMinutes" placeholder="Mins (max 15)" max="15">
+                <input type="number" id="stepMins" placeholder="Mins (max 15)">
                 <select id="stepImp">
-                    <option value="" disabled selected>Imp (1-10)</option>
-                    <option value="1">1 (Low)</option><option value="5">5</option><option value="10">10 (High)</option>
+                    <option value="" disabled selected>Importance</option>
+                    <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                    <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+                    <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+                    <option value="10">10</option>
                 </select>
             </div>
-            <div id="limitWarning" class="warning hidden">⚠️ GTD Rule: Tasks must be ≤ 15 minutes.</div>
-            
-            <div style="display:flex; gap:10px;">
-                <button class="add-step" onclick="saveStep()">Add Step</button>
-                <button class="finish" onclick="resetFlow()">Done Processing</button>
-            </div>
+            <button onclick="addStep()" style="background: #10b981; margin-top:10px;">Add Step to Inventory</button>
         </div>
     </div>
 
-    <h2 style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase;">Upcoming Action Inventory</h2>
-    <div id="inventory" class="task-list"></div>
+    <h3 style="font-size: 0.8rem; color: #64748b; text-transform: uppercase;">Inventory</h3>
+    <div id="inventory"></div>
+
+    <div id="historySection" class="card hidden" style="margin-top: 30px;">
+        <h3 style="font-size: 0.8rem; color: #64748b; text-transform: uppercase;">Recently Completed</h3>
+        <div id="historyList"></div>
+    </div>
 </div>
 
 <script>
@@ -89,63 +85,53 @@
     };
 
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
-    let allActions = [];
+    let tasks = [];
 
     window.onload = refresh;
 
+    function formatDate(iso) {
+        if (!iso) return "N/A";
+        const [y, m, d] = iso.split("-");
+        return `${d}/${m}/${y.slice(-2)}`;
+    }
+
     async function refresh() {
         const { data } = await client.from('subtasks').select('*').eq('completed', false);
-        allActions = data || [];
+        tasks = data || [];
         
-        // Spotlight Logic: Closest Date + Highest Importance
-        allActions.sort((a, b) => {
-            const dateA = new Date(a.due_date);
-            const dateB = new Date(b.due_date);
-            if (dateA - dateB !== 0) return dateA - dateB;
-            return b.importance - a.importance;
+        const now = new Date();
+        tasks.sort((a, b) => {
+            const getScore = (t) => {
+                const diff = (new Date(t.due_date) - now) / (1000 * 60 * 60 * 24);
+                const weight = Math.max(0.1, diff + 1);
+                return t.importance / weight; // Gravity toward high importance + near date
+            };
+            return getScore(b) - getScore(a);
         });
 
         render();
+        renderHistory();
     }
 
-    async function saveStep() {
-        const goal = document.getElementById('currentTitle').value;
+    async function addStep() {
+        const goal = document.getElementById('mainGoal').value;
         const title = document.getElementById('stepTitle').value;
-        const mins = parseInt(document.getElementById('stepMinutes').value);
+        const mins = parseInt(document.getElementById('stepMins').value);
         const imp = parseInt(document.getElementById('stepImp').value);
-        const date = document.getElementById('stepDate').value;
+        const date = document.getElementById('stepDate').value || document.getElementById('goalDate').value;
 
-        if (mins > 15) {
-            document.getElementById('limitWarning').classList.remove('hidden');
-            return;
-        }
-
-        if (!title || !mins || !imp || !date) return alert("Please fill all step fields.");
-
-        document.getElementById('limitWarning').classList.add('hidden');
-
-        // Combine goal and step for clarity
-        const finalTitle = goal ? `${goal}: ${title}` : title;
+        if (!title || !mins || !imp || !date) return alert("All step fields required.");
+        if (mins > 15) return alert("GTD Violation: Task must be 15 mins or less.");
 
         await client.from('subtasks').insert([{
-            title: finalTitle,
+            title: goal ? `${goal}: ${title}` : title,
             importance: imp,
             duration: mins,
             due_date: date,
             completed: false
         }]);
 
-        // Keep goal but clear step for rapid entry
         document.getElementById('stepTitle').value = '';
-        document.getElementById('stepTitle').focus();
-        refresh();
-    }
-
-    function resetFlow() {
-        document.getElementById('currentTitle').value = '';
-        document.getElementById('stepTitle').value = '';
-        document.getElementById('stepMinutes').value = '';
-        document.getElementById('stepDate').value = '';
         refresh();
     }
 
@@ -155,35 +141,56 @@
     }
 
     async function completeSpotlight() {
-        if (allActions.length > 0) completeTask(allActions[0].id);
+        if (tasks.length > 0) completeTask(tasks[0].id);
+    }
+
+    async function undoTask(id) {
+        await client.from('subtasks').update({ completed: false }).eq('id', id);
+        refresh();
+    }
+
+    async function renderHistory() {
+        const { data } = await client.from('subtasks').select('*').eq('completed', true).order('id', {ascending: false}).limit(3);
+        const histList = document.getElementById('historyList');
+        const histSection = document.getElementById('historySection');
+        
+        if (data && data.length > 0) {
+            histSection.classList.remove('hidden');
+            histList.innerHTML = data.map(t => `
+                <div class="history-item">
+                    <span>${t.title}</span>
+                    <button class="undo" onclick="undoTask('${t.id}')">Undo</button>
+                </div>
+            `).join('');
+        } else {
+            histSection.classList.add('hidden');
+        }
     }
 
     function render() {
-        const inventory = document.getElementById('inventory');
-        inventory.innerHTML = '';
+        const inv = document.getElementById('inventory');
+        inv.innerHTML = '';
 
-        if (allActions.length > 0) {
-            const top = allActions[0];
-            document.getElementById('spotlightTitle').innerText = top.title;
-            document.getElementById('spotlightDetails').innerText = `${top.duration}m | Imp: ${top.importance} | Due: ${top.due_date}`;
+        if (tasks.length > 0) {
+            const t = tasks[0];
+            document.getElementById('spotlightTitle').innerText = t.title;
+            document.getElementById('spotlightDetails').innerText = `Imp: ${t.importance} | ${t.duration}m | Due: ${formatDate(t.due_date)}`;
         } else {
-            document.getElementById('spotlightTitle').innerText = "Nothing Scheduled";
-            document.getElementById('spotlightDetails').innerText = "Ready for the next concept.";
+            document.getElementById('spotlightTitle').innerText = "All Clear";
+            document.getElementById('spotlightDetails').innerText = "Nothing left to process.";
         }
 
-        allActions.forEach(t => {
+        tasks.forEach(t => {
             const item = document.createElement('div');
-            item.className = 'task-item';
+            item.className = `task-item ${t.importance >= 8 ? 'priority-high' : ''}`;
             item.innerHTML = `
                 <div class="task-info">
-                    <div style="font-weight:600; font-size:0.9rem;">
-                        <span class="importance-tag">! ${t.importance}</span>${t.title}
-                    </div>
-                    <div class="task-meta">⏱️ ${t.duration}m | 📅 ${t.due_date}</div>
+                    <div style="font-weight:700;">[${t.importance}] ${t.title}</div>
+                    <div class="task-meta">${t.duration} mins | Due: ${formatDate(t.due_date)}</div>
                 </div>
-                <input type="checkbox" style="width:20px; height:20px; cursor:pointer;" onclick="completeTask('${t.id}')">
+                <input type="checkbox" style="width:22px; height:22px;" onclick="completeTask('${t.id}')">
             `;
-            inventory.appendChild(item);
+            inv.appendChild(item);
         });
     }
 </script>
