@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ActionStream | Pro GTD</title>
+    <title>ActionStream | Refined GTD</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
@@ -11,13 +11,15 @@
         body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; line-height: 1.5; }
         .container { max-width: 800px; margin: auto; }
         
+        /* SPOTLIGHT */
         #spotlight { background: var(--primary); color: white; padding: 40px; border-radius: 24px; margin-bottom: 30px; text-align: center; }
         .spotlight-task { font-size: 2rem; font-weight: 800; margin: 15px 0; }
         
+        /* CARDS */
         .card { background: var(--card); padding: 25px; border-radius: 16px; border: 1px solid #e2e8f0; margin-bottom: 25px; }
         .section-title { font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; display: block; }
         
-        /* INPUT STYLING */
+        /* INPUTS */
         .field-label { font-size: 0.75rem; font-weight: 600; color: #475569; margin-bottom: 4px; display: block; }
         input, select, button { padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 14px; width: 100%; box-sizing: border-box; }
         button { background: var(--accent); color: white; font-weight: 700; border: none; cursor: pointer; }
@@ -28,7 +30,8 @@
         .staged-item { display: flex; align-items: center; padding: 12px; background: white; border: 1px solid #bfdbfe; border-radius: 8px; margin-bottom: 6px; cursor: grab; }
         
         .recur-pill { background: #dcfce7; color: #166534; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: 700; margin-left: 8px; }
-        .importance-tag { font-weight: 800; color: var(--accent); margin-right: 12px; }
+        .recur-link { font-size: 0.75rem; color: var(--accent); cursor: pointer; text-decoration: underline; background: none; border: none; width: auto; padding: 0; display: inline-block; margin-top: 10px;}
+        
         .inventory-item { display: flex; align-items: center; padding: 14px; background: white; border-radius: 12px; margin-bottom: 8px; border: 1px solid #e2e8f0; }
         .hidden { display: none; }
     </style>
@@ -45,12 +48,18 @@
 
     <div class="card" id="goalCapture">
         <span class="section-title">Stage 1: Capture Intent</span>
-        <div style="display: grid; grid-template-columns: 2fr 1fr 0.5fr; gap: 12px;">
-            <input id="mainGoal" placeholder="Outcome description">
-            <input type="date" id="goalDate">
-            <select id="mainImp"></select>
+        <input id="mainGoal" placeholder="Outcome description" style="margin-bottom: 15px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div>
+                <label class="field-label">Goal Deadline</label>
+                <input type="date" id="goalDate">
+            </div>
+            <div>
+                <label class="field-label">Importance</label>
+                <select id="mainImp"></select>
+            </div>
         </div>
-        <button onclick="lockGoal()" style="margin-top: 15px;">Start Strategic Breakdown</button>
+        <button onclick="lockGoal()" style="margin-top: 20px;">Start Strategic Breakdown</button>
     </div>
 
     <div class="card hidden planning-mode" id="planningArea">
@@ -60,10 +69,7 @@
                 <h2 id="displayGoal" style="margin:0; font-size: 1.25rem; color: var(--primary);"></h2>
             </div>
             <div style="display: flex; gap: 15px; align-items: center;">
-                <div>
-                    <label class="field-label">Imp</label>
-                    <div id="displayImp" style="font-weight: 800; color: var(--accent); font-size: 1.2rem;"></div>
-                </div>
+                <div id="displayImp" style="font-weight: 800; color: var(--accent); font-size: 1.5rem;"></div>
                 <div>
                     <label class="field-label">Goal Deadline</label>
                     <input type="date" id="activeGoalDeadline" style="padding: 5px; font-size: 0.8rem;" onchange="updateGoalDeadline(this.value)">
@@ -76,7 +82,7 @@
                 <label class="field-label">Action Title</label>
                 <input id="stageTitle" placeholder="What is the next physical step?">
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                 <div>
                     <label class="field-label">Action Date</label>
                     <input type="date" id="stageDate">
@@ -85,18 +91,21 @@
                     <label class="field-label">Mins (Max 15)</label>
                     <input type="number" id="stageMins" placeholder="Mins">
                 </div>
-                <div>
-                    <label class="field-label">Recurrence</label>
-                    <select id="stageRecur">
-                        <option value="none">Once</option>
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="fortnightly">Fortnightly</option>
-                        <option value="monthly">Monthly</option>
-                    </select>
-                </div>
             </div>
-            <button onclick="addToStaging()" style="background: #10b981;">Add to Draft Sequence</button>
+            
+            <button class="recur-link" onclick="toggleRecur()">+ Set Recurrence</button>
+            <div id="recurContainer" class="hidden" style="margin-top: 10px;">
+                <label class="field-label">Frequency</label>
+                <select id="stageRecur" style="padding: 5px; height: 35px;">
+                    <option value="none">Once</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="fortnightly">Fortnightly</option>
+                    <option value="monthly">Monthly</option>
+                </select>
+            </div>
+
+            <button onclick="addToStaging()" style="background: #10b981; margin-top: 15px;">Add to Draft Sequence</button>
         </div>
 
         <div id="stagedList" style="margin-bottom: 20px;"></div>
@@ -139,6 +148,11 @@
         refresh();
     };
 
+    function toggleRecur() {
+        const container = document.getElementById('recurContainer');
+        container.classList.toggle('hidden');
+    }
+
     function updateGoalDeadline(val) { if(activeGoal) activeGoal.date = val; }
 
     async function refresh() {
@@ -176,10 +190,11 @@
         const recur = document.getElementById('stageRecur').value;
 
         if (!title || !mins || !date) return alert("Details required.");
-        if (new Date(date) > new Date(activeGoal.date)) return alert("Step date cannot be later than Goal Deadline.");
-
+        
         stagingTasks.push({ title, date, mins, recur });
         document.getElementById('stageTitle').value = '';
+        document.getElementById('recurContainer').classList.add('hidden');
+        document.getElementById('stageRecur').value = 'none';
         renderStaging();
     }
 
@@ -198,7 +213,6 @@
 
     async function finalisePlanning() {
         if (stagingTasks.length === 0) return alert("No actions added.");
-        
         const toInsert = stagingTasks.map((t, index) => ({
             title: `${activeGoal.goal}: ${t.title}`,
             importance: parseInt(activeGoal.imp),
@@ -206,9 +220,8 @@
             due_date: t.date,
             completed: false,
             importance_ranking: index,
-            notes: t.recur // Using notes field to temporarily store recurrence type
+            notes: t.recur
         }));
-
         await client.from('subtasks').insert(toInsert);
         stagingTasks = []; activeGoal = null;
         document.getElementById('planningArea').classList.add('hidden');
@@ -217,22 +230,16 @@
     }
 
     async function completeTask(task) {
-        // Handle Recurrence
         if (task.notes && task.notes !== 'none') {
             const nextDate = new Date(task.due_date);
             if (task.notes === 'daily') nextDate.setDate(nextDate.getDate() + 1);
             if (task.notes === 'weekly') nextDate.setDate(nextDate.getDate() + 7);
             if (task.notes === 'fortnightly') nextDate.setDate(nextDate.getDate() + 14);
             if (task.notes === 'monthly') nextDate.setMonth(nextDate.getMonth() + 1);
-
             await client.from('subtasks').insert([{
-                ...task,
-                id: undefined, // Create new ID
-                due_date: nextDate.toISOString().split('T')[0],
-                completed: false
+                ...task, id: undefined, due_date: nextDate.toISOString().split('T')[0], completed: false
             }]);
         }
-
         await client.from('subtasks').update({ completed: true }).eq('id', task.id);
         refresh();
     }
@@ -255,12 +262,11 @@
         } else {
             document.getElementById('spotlightTitle').innerText = "All Clear";
         }
-
         masterTasks.forEach(t => {
             const item = document.createElement('div');
             item.className = 'inventory-item';
             item.innerHTML = `
-                <div class="importance-tag">${t.importance}</div>
+                <div style="font-weight:800; color:var(--accent); margin-right:12px;">${t.importance}</div>
                 <div style="flex:1">
                     <div style="font-weight:700; font-size:0.9rem;">${t.title} ${t.notes && t.notes !== 'none' ? `<span class="recur-pill">${t.notes}</span>` : ''}</div>
                     <div style="font-size:0.75rem; color:#64748b;">${t.duration}m | ${t.due_date}</div>
