@@ -3,57 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ActionStream | Validated GTD</title>
+    <title>ActionStream | Pro GTD</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
         :root { --bg: #f8fafc; --card: #ffffff; --primary: #0f172a; --accent: #2563eb; --text: #1e293b; --error: #ef4444; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 12px; }
-        .container { max-width: 500px; margin: auto; }
+        .container { max-width: 500px; margin: auto; padding-bottom: 50px; }
 
+        /* SPOTLIGHT */
         #spotlight { 
-            background: var(--primary); color: white; padding: 25px 15px; border-radius: 20px; 
-            margin-bottom: 20px; text-align: center; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+            background: var(--primary); color: white; padding: 30px 15px; border-radius: 24px; 
+            margin-bottom: 25px; text-align: center; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.2);
         }
-        .spotlight-task { font-size: 1.4rem; font-weight: 800; margin: 10px 0; line-height: 1.2; }
+        .spotlight-task { font-size: 1.6rem; font-weight: 800; margin: 10px 0; line-height: 1.1; }
         
-        .card { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
-        .section-title { font-size: 0.65rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; display: block; }
+        /* CARDS */
+        .card { background: var(--card); padding: 20px; border-radius: 18px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+        .section-title { font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 15px; display: block; }
         
-        input, select, button { padding: 14px; border-radius: 10px; border: 1px solid #cbd5e1; font-size: 16px; width: 100%; margin-bottom: 10px; outline: none; }
+        input, select, button { padding: 14px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; width: 100%; margin-bottom: 12px; outline: none; }
         button { background: var(--accent); color: white; font-weight: 700; border: none; cursor: pointer; }
         
         .planning-mode { border: 2px solid var(--accent); background: #f0f7ff; }
-        .row { display: flex; gap: 10px; }
+        .row { display: flex; gap: 12px; }
         .row > div { flex: 1; }
         .field-label { font-size: 0.75rem; font-weight: 600; color: #475569; margin-bottom: 4px; display: block; }
 
-        .staged-item { display: flex; align-items: center; padding: 12px; background: white; border: 1px solid #bfdbfe; border-radius: 10px; margin-bottom: 8px; }
-        .recur-pill { background: #dcfce7; color: #166534; font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; font-weight: 700; margin-left: 5px; }
-        .recur-link { font-size: 0.8rem; color: var(--accent); cursor: pointer; text-decoration: underline; background: none; border: none; width: auto; margin: 0 0 10px 0; padding: 0; display: inline-block; }
+        .staged-item { display: flex; align-items: center; padding: 14px; background: white; border: 1px solid #bfdbfe; border-radius: 12px; margin-bottom: 8px; }
+        .recur-pill { background: #dcfce7; color: #166534; font-size: 0.65rem; padding: 3px 8px; border-radius: 6px; font-weight: 800; margin-left: 8px; text-transform: uppercase; }
+        .recur-link { font-size: 0.85rem; color: var(--accent); cursor: pointer; text-decoration: underline; background: none; border: none; width: auto; margin: 0 0 12px 0; padding: 0; display: inline-block; }
 
-        .inventory-item { display: flex; align-items: center; padding: 15px; background: white; border-radius: 14px; margin-bottom: 10px; border: 1px solid #e2e8f0; }
-        .imp-num { font-weight: 900; color: var(--accent); font-size: 1.1rem; min-width: 35px; }
-        .checkbox { width: 30px; height: 30px; border-radius: 8px; }
+        .inventory-item { display: flex; align-items: center; padding: 16px; background: white; border-radius: 16px; margin-bottom: 10px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .imp-num { font-weight: 900; color: var(--accent); font-size: 1.2rem; min-width: 40px; }
+        .checkbox { width: 34px; height: 34px; border-radius: 10px; accent-color: var(--accent); cursor: pointer; }
         .hidden { display: none; }
         
-        .error-msg { color: var(--error); font-size: 0.75rem; font-weight: 700; margin-bottom: 10px; text-align: center; display: none; }
+        .error-msg { color: var(--error); font-size: 0.8rem; font-weight: 700; margin-bottom: 12px; text-align: center; display: none; padding: 12px; background: #fee2e2; border-radius: 10px; border: 1px solid #fecaca; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div id="spotlight">
-        <span class="section-title" style="color: rgba(255,255,255,0.5)">Current Priority</span>
+        <span class="section-title" style="color: rgba(255,255,255,0.6)">Current Focus</span>
         <div id="spotlightTitle" class="spotlight-task">...</div>
-        <div id="spotlightDetails" style="font-size: 0.8rem; opacity: 0.8; margin-bottom: 15px;"></div>
-        <button id="spotlightBtn" style="background: white; color: var(--primary);">Complete Action</button>
+        <div id="spotlightDetails" style="font-size: 0.85rem; opacity: 0.85; margin-bottom: 20px;"></div>
+        <button id="spotlightBtn" style="background: white; color: var(--primary); border-radius: 14px; max-width: 260px; margin: auto; display: block;">Complete Now</button>
     </div>
 
     <div class="card" id="goalCapture">
-        <span class="section-title">Stage 1: Capture Goal</span>
-        <input id="mainGoal" placeholder="Outcome description">
+        <span class="section-title">Stage 1: Define Project</span>
+        <input id="mainGoal" placeholder="Overall Project Name">
         <div class="row">
             <div>
                 <label class="field-label">Goal Deadline</label>
@@ -64,33 +66,38 @@
                 <select id="mainImp"></select>
             </div>
         </div>
-        <button onclick="lockGoal()" style="margin-top: 10px;">Start Strategic Breakdown</button>
+        <button onclick="lockGoal()" style="margin-top: 10px;">Decompose Project</button>
     </div>
 
     <div class="card hidden planning-mode" id="planningArea">
-        <div style="border-bottom: 1px solid #bfdbfe; padding-bottom: 10px; margin-bottom: 15px;">
-            <h2 id="displayGoal" style="margin:0; font-size: 1.1rem; color: var(--primary);"></h2>
-            <div class="row" style="margin-top: 5px; align-items: center;">
-                <div style="flex:2"><input type="date" id="activeGoalDeadline" style="font-size: 0.8rem; padding: 8px;" onchange="updateGoalDeadline(this.value)"></div>
-                <div style="flex:1; text-align: right; font-weight: 900; color: var(--accent); font-size: 1.4rem;" id="displayImp"></div>
+        <div style="border-bottom: 1px solid #bfdbfe; padding-bottom: 12px; margin-bottom: 18px;">
+            <h2 id="displayGoal" style="margin:0; font-size: 1.15rem; color: var(--primary); font-weight: 800;"></h2>
+            <div class="row" style="margin-top: 8px; align-items: center;">
+                <div style="flex:2">
+                    <label class="field-label" style="font-size: 0.65rem;">Final Deadline</label>
+                    <input type="date" id="activeGoalDeadline" style="padding: 8px; font-size: 0.8rem;" onchange="updateGoalDeadline(this.value)">
+                </div>
+                <div style="flex:1; text-align: right; font-weight: 900; color: var(--accent); font-size: 1.6rem;" id="displayImp"></div>
             </div>
         </div>
 
-        <input id="stageTitle" placeholder="The next physical step">
+        <label class="field-label">Actionable Step</label>
+        <input id="stageTitle" placeholder="Next physical action">
+        
         <div class="row">
             <div>
-                <label class="field-label">Step Date</label>
+                <label class="field-label">Action Date</label>
                 <input type="date" id="stageDate">
             </div>
             <div>
-                <label class="field-label">Mins (Max 15)</label>
-                <input type="number" id="stageMins" placeholder="15">
+                <label class="field-label">Mins</label>
+                <input type="number" id="stageMins" placeholder="Max 15">
             </div>
         </div>
         
         <button class="recur-link" onclick="toggleRecur()">+ Set Recurrence</button>
         <div id="recurContainer" class="hidden">
-            <select id="stageRecur">
+            <select id="stageRecur" style="height: 50px;">
                 <option value="none">Once</option>
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
@@ -100,17 +107,17 @@
         </div>
 
         <div id="valError" class="error-msg"></div>
-        <button onclick="addToStaging()" style="background: #10b981;">Add Step to Sequence</button>
+        <button onclick="addToStaging()" style="background: #10b981;">Add to Staging</button>
 
-        <div id="stagedList" style="margin: 15px 0;"></div>
+        <div id="stagedList" style="margin: 20px 0;"></div>
 
         <div class="row">
-            <button onclick="finalisePlanning()" style="flex: 2;">Commit All</button>
+            <button onclick="finalisePlanning()" style="flex: 2;">Commit Strategy</button>
             <button onclick="cancelPlanning()" style="background: #ef4444; flex: 1;">Cancel</button>
         </div>
     </div>
 
-    <span class="section-title">Master Inventory</span>
+    <span class="section-title">Active Inventory</span>
     <div id="masterInventory"></div>
 </div>
 
@@ -143,7 +150,8 @@
     function updateGoalDeadline(val) { if(activeGoal) activeGoal.date = val; }
 
     async function refresh() {
-        const { data } = await client.from('subtasks').select('*').eq('completed', false);
+        const { data, error } = await client.from('subtasks').select('*').eq('completed', false);
+        if (error) return console.error(error);
         masterTasks = data || [];
         masterTasks.sort((a, b) => {
             const dateA = new Date(a.due_date);
@@ -158,7 +166,7 @@
         const goal = document.getElementById('mainGoal').value;
         const date = document.getElementById('goalDate').value;
         const imp = document.getElementById('mainImp').value;
-        if (!goal || !date) return alert("Goal and Date required.");
+        if (!goal || !date) return alert("Project details incomplete.");
         activeGoal = { goal, date, imp };
         document.getElementById('displayGoal').innerText = goal;
         document.getElementById('displayImp').innerText = imp;
@@ -175,17 +183,10 @@
         const recur = document.getElementById('stageRecur').value;
         const errDiv = document.getElementById('valError');
 
-        // Validation Logic
         errDiv.style.display = 'none';
-        if (!title || !mins || !date) { 
-            showError("Please fill all fields."); return; 
-        }
-        if (mins > 15) { 
-            showError("Duration cannot exceed 15 mins."); return; 
-        }
-        if (new Date(date) > new Date(activeGoal.date)) {
-            showError("Step date cannot be after Goal Deadline."); return;
-        }
+        if (!title || !mins || !date) { showError("Details required."); return; }
+        if (mins > 15) { showError("GTD Limit: 15 mins max."); return; }
+        if (new Date(date) > new Date(activeGoal.date)) { showError("Step date exceeds goal deadline."); return; }
 
         stagingTasks.push({ title, date, mins, recur });
         document.getElementById('stageTitle').value = '';
@@ -204,17 +205,17 @@
         const list = document.getElementById('stagedList');
         list.innerHTML = stagingTasks.map((t, i) => `
             <div class="staged-item" data-idx="${i}">
-                <div style="color:#cbd5e1; margin-right:12px; font-weight:bold;">⋮⋮</div>
+                <div style="color:#cbd5e1; margin-right:15px; font-weight:bold; font-size: 1.2rem;">⋮⋮</div>
                 <div style="flex:1;">
-                    <div style="font-size:0.95rem; font-weight:700;">${t.title}${t.recur !== 'none' ? `<span class="recur-pill">${t.recur}</span>` : ''}</div>
-                    <div style="font-size:0.75rem; color:#64748b;">${t.date} • ${t.mins}m</div>
+                    <div style="font-size:1rem; font-weight:700;">${t.title}${t.recur !== 'none' ? ` <span class="recur-pill">${t.recur}</span>` : ''}</div>
+                    <div style="font-size:0.8rem; color:#64748b; margin-top: 2px;">${t.date} • ${t.mins}m</div>
                 </div>
             </div>
         `).join('');
     }
 
     async function finalisePlanning() {
-        if (stagingTasks.length === 0) return alert("Add steps first.");
+        if (stagingTasks.length === 0) return alert("Planning draft is empty.");
         const toInsert = stagingTasks.map((t, index) => ({
             title: `${activeGoal.goal}: ${t.title}`,
             importance: parseInt(activeGoal.imp),
@@ -222,10 +223,12 @@
             due_date: t.date,
             completed: false,
             importance_ranking: index,
-            description: t.recur
+            recurrence: t.recur
         }));
+
         const { error } = await client.from('subtasks').insert(toInsert);
-        if (error) return alert("Error: " + error.message);
+        if (error) return alert("Sync Error: " + error.message);
+
         stagingTasks = []; activeGoal = null;
         document.getElementById('mainGoal').value = '';
         document.getElementById('planningArea').classList.add('hidden');
@@ -234,15 +237,17 @@
     }
 
     async function completeTask(task) {
-        if (task.description && task.description !== 'none') {
+        if (task.recurrence && task.recurrence !== 'none') {
             const nextDate = new Date(task.due_date);
-            if (task.description === 'daily') nextDate.setDate(nextDate.getDate() + 1);
-            else if (task.description === 'weekly') nextDate.setDate(nextDate.getDate() + 7);
-            else if (task.description === 'fortnightly') nextDate.setDate(nextDate.getDate() + 14);
-            else if (task.description === 'monthly') nextDate.setMonth(nextDate.getMonth() + 1);
+            if (task.recurrence === 'daily') nextDate.setDate(nextDate.getDate() + 1);
+            else if (task.recurrence === 'weekly') nextDate.setDate(nextDate.getDate() + 7);
+            else if (task.recurrence === 'fortnightly') nextDate.setDate(nextDate.getDate() + 14);
+            else if (task.recurrence === 'monthly') nextDate.setMonth(nextDate.getMonth() + 1);
+
             await client.from('subtasks').insert([{
                 title: task.title, importance: task.importance, duration: task.duration,
-                due_date: nextDate.toISOString().split('T')[0], completed: false, description: task.description
+                due_date: nextDate.toISOString().split('T')[0], completed: false, 
+                recurrence: task.recurrence, importance_ranking: task.importance_ranking
             }]);
         }
         await client.from('subtasks').update({ completed: true }).eq('id', task.id);
@@ -266,8 +271,8 @@
             spotlightBtn.onclick = () => completeTask(t);
             spotlightBtn.style.display = 'block';
         } else {
-            document.getElementById('spotlightTitle').innerText = "All Clear";
-            document.getElementById('spotlightDetails').innerText = "";
+            document.getElementById('spotlightTitle').innerText = "Inventory Clear";
+            document.getElementById('spotlightDetails').innerText = "Add a project to begin.";
             spotlightBtn.style.display = 'none';
         }
         masterTasks.forEach(t => {
@@ -275,9 +280,9 @@
             item.className = 'inventory-item';
             item.innerHTML = `
                 <div class="imp-num">${t.importance}</div>
-                <div style="flex:1; padding-right:10px;">
-                    <div style="font-weight:700; font-size:0.95rem;">${t.title}${t.description && t.description !== 'none' ? `<span class="recur-pill">${t.description}</span>` : ''}</div>
-                    <div style="font-size:0.75rem; color:#64748b;">${t.due_date} • ${t.duration}m</div>
+                <div style="flex:1; padding-right:12px;">
+                    <div style="font-weight:700; font-size:1rem;">${t.title}${t.recurrence && t.recurrence !== 'none' ? ` <span class="recur-pill">${t.recurrence}</span>` : ''}</div>
+                    <div style="font-size:0.8rem; color:#64748b; margin-top: 3px;">${t.due_date} • ${t.duration}m</div>
                 </div>
                 <input type="checkbox" class="checkbox" onclick='completeTask(${JSON.stringify(t)})'>
             `;
