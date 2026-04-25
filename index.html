@@ -1,310 +1,275 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Task Planner</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Next Action Engine</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <style>
+        :root {
+            --bg: #f8f9fa;
+            --card: #ffffff;
+            --primary: #2563eb;
+            --text: #1e293b;
+            --accent: #f59e0b;
+        }
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+        }
 
-<style>
-body {
-    font-family: Arial;
-    background: #f4f6f8;
-    padding: 20px;
-}
+        .container {
+            width: 100%;
+            max-width: 600px;
+            padding: 40px 20px;
+        }
 
-.container {
-    max-width: 900px;
-    margin: auto;
-    background: white;
-    padding: 20px;
-    border-radius: 10px;
-}
+        header { margin-bottom: 30px; }
+        h1 { font-weight: 800; font-size: 1.5rem; letter-spacing: -0.025em; }
 
-input, button {
-    padding: 10px;
-    margin-top: 10px;
-    width: 100%;
-}
+        /* SPOTLIGHT SECTION */
+        #spotlight {
+            background: var(--primary);
+            color: white;
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.2);
+        }
 
-button {
-    background: #2b7cff;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-}
+        #spotlight .label { font-size: 0.75rem; text-transform: uppercase; opacity: 0.8; letter-spacing: 0.05em; }
+        #spotlight .task-name { font-size: 1.5rem; font-weight: 700; margin: 10px 0; }
 
-.row {
-    display: flex;
-    gap: 10px;
-}
+        /* INPUT AREA */
+        .input-group {
+            background: var(--card);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 30px;
+        }
 
-.task {
-    width: 48%;
-    border: 1px solid #ddd;
-    padding: 10px;
-    border-radius: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
+        input, select, button {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            box-sizing: border-box;
+        }
 
-.task-info {
-    flex: 1;
-}
+        button {
+            background: var(--primary);
+            color: white;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
 
-.hidden { display:none; }
+        button.secondary { background: #64748b; }
+        button:hover { opacity: 0.9; }
 
-.section {
-    margin-top: 25px;
-}
-</style>
+        /* LISTS */
+        .section-title { font-size: 0.9rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 15px; }
+        .task-item {
+            background: var(--card);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .task-item input[type="checkbox"] { width: auto; margin: 0; cursor: pointer; }
+        .task-meta { font-size: 0.8rem; color: #94a3b8; }
+        
+        .hidden { display: none; }
+        .tag { font-size: 0.7rem; padding: 2px 8px; background: #e2e8f0; border-radius: 4px; color: #475569; }
+    </style>
 </head>
-
 <body>
 
 <div class="container">
+    <header>
+        <h1>Next Action Engine</h1>
+    </header>
 
-<h1>Task Planner</h1>
+    <div id="spotlight">
+        <div class="label">Current Focus</div>
+        <div id="spotlightTitle" class="task-name">Loading your next move...</div>
+        <div id="spotlightMeta" class="label">---</div>
+        <button onclick="completeSpotlight()" style="background: white; color: var(--primary); margin-top: 15px;">Mark as Done</button>
+    </div>
 
-<!-- CREATE -->
-<div id="createScreen">
-    <input id="taskTitle" placeholder="Task title">
-    <input type="date" id="dueDate">
-    <input type="number" id="importance" placeholder="Importance (0–10)">
-    <input type="number" id="timeEstimate" placeholder="Time (minutes)">
-    <button onclick="addTask()">Add Task</button>
-</div>
+    <div class="input-group" id="capturePanel">
+        <div class="section-title">Capture New Action</div>
+        <input id="taskTitle" placeholder="What is the very next physical step? (e.g. Call Bob)">
+        <div style="display: flex; gap: 10px;">
+            <select id="taskContext">
+                <option value="@Computer">@Computer</option>
+                <option value="@Phone">@Phone</option>
+                <option value="@Office">@Office</option>
+                <option value="@Errands">@Errands</option>
+            </select>
+            <select id="taskTime">
+                <option value="5">5 min</option>
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="60">60+ min</option>
+            </select>
+        </div>
+        <button onclick="processEntry()">Process into System</button>
+    </div>
 
-<!-- BREAKDOWN -->
-<div id="breakdownScreen" class="hidden">
-    <h3>Break into Steps</h3>
-    <div id="breakdownList"></div>
-    <button onclick="saveSubtasks()">Save Steps</button>
-</div>
+    <div id="breakdownPanel" class="input-group hidden">
+        <div class="section-title" style="color: var(--accent);">⚠️ Action too large!</div>
+        <p style="font-size: 0.85rem;">David Allen says: "If it takes more than 15 mins, it's a project." Break it into two tiny steps:</p>
+        <input id="substep1" placeholder="First tiny step...">
+        <input id="substep2" placeholder="Second tiny step...">
+        <button onclick="saveBreakdown()">Split Action</button>
+        <button class="secondary" onclick="cancelBreakdown()">Actually, I'll do it in one</button>
+    </div>
 
-<!-- NEXT TASK -->
-<div class="section">
-    <h2>Next Best Task</h2>
-    <div id="nextTask"></div>
-</div>
-
-<!-- TODAY -->
-<div class="section">
-    <h2>Today</h2>
-    <div id="todayList" class="row"></div>
-</div>
-
-<!-- TOMORROW -->
-<div class="section">
-    <h2>Tomorrow</h2>
-    <div id="tomorrowList" class="row"></div>
-</div>
-
-<!-- LATER -->
-<div class="section">
-    <h2>Later</h2>
-    <div id="laterList" class="row"></div>
-</div>
-
+    <div class="section-title">Available Actions</div>
+    <div id="actionList"></div>
 </div>
 
 <script>
+    const CONFIG = {
+        URL: "https://wuhklqulwhioiynoadtj.supabase.co",
+        KEY: "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx"
+    };
 
-// CONFIG
-const CONFIG = {
-    SUPABASE_URL: "https://wuhklqulwhioiynoadtj.supabase.co",
-    SUPABASE_KEY: "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx"
-};
+    let supabaseClient;
+    let allTasks = [];
+    let pendingBreakdown = null;
 
-let client;
-let tasks = [];
-let currentTask;
-let currentTaskId;
+    window.onload = () => {
+        supabaseClient = supabase.createClient(CONFIG.URL, CONFIG.KEY);
+        refreshUI();
+    };
 
-const el = {
-    title: taskTitle,
-    dueDate: dueDate,
-    importance: importance,
-    time: timeEstimate,
-    create: createScreen,
-    breakdown: breakdownScreen,
-    breakdownList: breakdownList
-};
-
-window.onload = async () => {
-    client = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
-    await loadTasks();
-};
-
-// DATE HELPERS
-function todayStr() {
-    return new Date().toISOString().split("T")[0];
-}
-
-function tomorrowStr() {
-    let d = new Date();
-    d.setDate(d.getDate()+1);
-    return d.toISOString().split("T")[0];
-}
-
-function formatDate(d) {
-    let date = new Date(d);
-    return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getFullYear()).slice(-2)}`;
-}
-
-// ADD TASK
-async function addTask() {
-
-    let title = el.title.value;
-    let dueDate = el.dueDate.value;
-    let importance = parseInt(el.importance.value);
-    let time = parseInt(el.time.value);
-
-    let { data } = await client.from("tasks")
-        .insert([{ title, due_date: dueDate, importance, time_estimate: time }])
-        .select();
-
-    currentTask = data[0];
-    currentTaskId = currentTask.id;
-
-    showBreakdown(currentTask);
-}
-
-// BREAKDOWN
-function showBreakdown(task) {
-
-    el.create.classList.add("hidden");
-    el.breakdown.classList.remove("hidden");
-    el.breakdownList.innerHTML = "";
-
-    let total = task.time_estimate;
-
-    while (total > 0) {
-
-        let step = Math.min(15, total);
-
-        let div = document.createElement("div");
-
-        div.innerHTML = `
-            <input value="${task.title}">
-            <input type="date" max="${task.due_date}" value="${task.due_date}">
-            <span data-duration="${step}">${step} min</span>
-        `;
-
-        el.breakdownList.appendChild(div);
-
-        total -= step;
+    async function refreshUI() {
+        const { data, error } = await supabaseClient
+            .from('subtasks') // Using your existing table name
+            .select('*')
+            .eq('completed', false)
+            .order('importance', { ascending: false });
+        
+        allTasks = data || [];
+        render();
     }
-}
 
-// SAVE SUBTASKS
-async function saveSubtasks() {
+    function processEntry() {
+        const title = document.getElementById('taskTitle').value;
+        const time = parseInt(document.getElementById('taskTime').value);
+        const context = document.getElementById('taskContext').value;
 
-    let items = el.breakdownList.children;
-    let inserts = [];
+        if (!title) return alert("Describe the action!");
 
-    for (let item of items) {
+        // THE GTD RULE: If it's too long, force a breakdown
+        if (time > 15) {
+            pendingBreakdown = { title, time, context };
+            document.getElementById('capturePanel').classList.add('hidden');
+            document.getElementById('breakdownPanel').classList.remove('hidden');
+        } else {
+            saveTask(title, time, context);
+        }
+    }
 
-        let inputs = item.querySelectorAll("input");
-        let duration = parseInt(item.querySelector("span").dataset.duration);
-
-        inserts.push({
-            parent_id: currentTaskId,
-            title: currentTask.title + " - " + inputs[0].value,
-            due_date: inputs[1].value,
+    async function saveTask(title, duration, context) {
+        await supabaseClient.from('subtasks').insert([{
+            title: title,
             duration: duration,
-            importance: currentTask.importance
+            importance: 5, // Default
+            due_date: new Date().toISOString().split('T')[0],
+            completed: false
+        }]);
+        
+        resetInputs();
+        refreshUI();
+    }
+
+    async function saveBreakdown() {
+        const s1 = document.getElementById('substep1').value;
+        const s2 = document.getElementById('substep2').value;
+        
+        if(!s1 || !s2) return alert("Define both steps!");
+
+        await supabaseClient.from('subtasks').insert([
+            { title: s1, duration: 10, importance: 6 },
+            { title: s2, duration: 10, importance: 5 }
+        ]);
+
+        cancelBreakdown();
+        refreshUI();
+    }
+
+    function cancelBreakdown() {
+        pendingBreakdown = null;
+        document.getElementById('capturePanel').classList.remove('hidden');
+        document.getElementById('breakdownPanel').classList.add('hidden');
+        resetInputs();
+    }
+
+    function resetInputs() {
+        document.getElementById('taskTitle').value = '';
+        document.getElementById('substep1').value = '';
+        document.getElementById('substep2').value = '';
+    }
+
+    async function completeTask(id) {
+        await supabaseClient.from('subtasks').update({ completed: true }).eq('id', id);
+        refreshUI();
+    }
+
+    async function completeSpotlight() {
+        if (allTasks.length > 0) {
+            await completeTask(allTasks[0].id);
+        }
+    }
+
+    function render() {
+        const listContainer = document.getElementById('actionList');
+        const spotlightTitle = document.getElementById('spotlightTitle');
+        const spotlightMeta = document.getElementById('spotlightMeta');
+        
+        listContainer.innerHTML = '';
+
+        if (allTasks.length === 0) {
+            spotlightTitle.innerText = "Clear Skies! ☀️";
+            spotlightMeta.innerText = "Nothing in the inbox.";
+            return;
+        }
+
+        // Spotlight is always the first item
+        const topTask = allTasks[0];
+        spotlightTitle.innerText = topTask.title;
+        spotlightMeta.innerText = `${topTask.duration} mins | Priority: ${topTask.importance}`;
+
+        // Render the rest
+        allTasks.forEach((task, index) => {
+            const item = document.createElement('div');
+            item.className = 'task-item';
+            item.innerHTML = `
+                <input type="checkbox" onclick="completeTask('${task.id}')">
+                <div style="flex:1">
+                    <div style="font-weight:600; font-size:0.9rem">${task.title}</div>
+                    <div class="task-meta">${task.duration}m <span class="tag">Next Action</span></div>
+                </div>
+            `;
+            listContainer.appendChild(item);
         });
     }
-
-    await client.from("subtasks").insert(inserts);
-
-    el.breakdown.classList.add("hidden");
-    el.create.classList.remove("hidden");
-
-    await loadTasks();
-}
-
-// LOAD TASKS
-async function loadTasks() {
-
-    let { data } = await client
-        .from("subtasks")
-        .select("*")
-        .eq("completed", false);
-
-    tasks = data;
-
-    tasks.sort((a,b)=>{
-        let d1 = new Date(a.due_date);
-        let d2 = new Date(b.due_date);
-        if (d1-d2 !== 0) return d1-d2;
-        return b.importance - a.importance;
-    });
-
-    render();
-}
-
-// COMPLETE
-async function completeTask(id){
-    await client.from("subtasks").update({completed:true}).eq("id",id);
-    await loadTasks();
-}
-
-// PUSH TO TOMORROW
-async function pushTomorrow(task){
-    let newDate = tomorrowStr();
-    await client.from("subtasks").update({due_date:newDate}).eq("id",task.id);
-    await loadTasks();
-}
-
-// RENDER
-function render(){
-
-    let today = todayStr();
-    let tomorrow = tomorrowStr();
-
-    let todayTasks = tasks.filter(t=>t.due_date===today).slice(0,3);
-    let tomorrowTasks = tasks.filter(t=>t.due_date===tomorrow);
-    let laterTasks = tasks.filter(t=>t.due_date>tomorrow);
-
-    renderList("todayList", todayTasks);
-    renderList("tomorrowList", tomorrowTasks);
-    renderList("laterList", laterTasks);
-
-    // NEXT BEST TASK
-    let next = todayTasks[0];
-    nextTask.innerHTML = next ? next.title : "Nothing urgent 🎉";
-}
-
-// RENDER LIST
-function renderList(id, list){
-
-    let container = document.getElementById(id);
-    container.innerHTML = "";
-
-    list.forEach(t=>{
-
-        let div = document.createElement("div");
-        div.className = "task";
-
-        div.innerHTML = `
-            <div class="task-info">
-                <strong>${t.title}</strong><br>
-                ${formatDate(t.due_date)} | ${t.duration} min
-            </div>
-            <div>
-                <input type="checkbox" onclick="completeTask('${t.id}')">
-                <button onclick='pushTomorrow(${JSON.stringify(t)})'>→</button>
-            </div>
-        `;
-
-        container.appendChild(div);
-    });
-}
-
 </script>
 
 </body>
