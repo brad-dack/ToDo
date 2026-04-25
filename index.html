@@ -21,15 +21,15 @@
         .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
         
         input, select, button { padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 14px; width: 100%; box-sizing: border-box; }
-        button { background: var(--accent); color: white; font-weight: 600; border: none; cursor: pointer; }
+        button { background: var(--accent); color: white; font-weight: 600; border: none; cursor: pointer; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
         
-        /* DRAG AND DROP STYLING */
         .task-item { 
             display: flex; align-items: center; padding: 14px; background: white; 
             border-radius: 12px; margin-bottom: 8px; border: 1px solid #e2e8f0;
-            cursor: grab; transition: transform 0.2s, box-shadow 0.2s;
+            cursor: grab;
         }
-        .task-item:active { cursor: grabbing; transform: scale(1.02); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .task-item:active { cursor: grabbing; }
         .sortable-ghost { opacity: 0.3; background: #e2e8f0; }
         
         .drag-handle { color: #cbd5e1; margin-right: 15px; font-size: 1.2rem; user-select: none; }
@@ -37,6 +37,8 @@
         .task-info { flex: 1; }
         .task-meta { font-size: 0.75rem; color: #64748b; margin-top: 4px; }
         .hidden { display: none; }
+
+        .history-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
     </style>
 </head>
 <body>
@@ -88,15 +90,12 @@
         const sel = document.getElementById('mainImp');
         for(let i=1; i<=10; i++) sel.options[sel.options.length] = new Option(i, i);
         
-        // Initialize Sortable
         const el = document.getElementById('inventory');
         Sortable.create(el, {
             animation: 150,
             ghostClass: 'sortable-ghost',
-            handle: '.task-item',
-            onEnd: async function () {
-                await updateManualOrder();
-            },
+            handle: '.drag-handle',
+            onEnd: async () => { await updateManualOrder(); }
         });
         
         refresh();
@@ -109,19 +108,17 @@
     }
 
     async function refresh() {
-        const { data } = await client.from('subtasks').select('*').eq('completed', false);
+        const { data, error } = await client.from('subtasks').select('*').eq('completed', false);
+        if (error) return console.error("Refresh Error:", error);
+        
         tasks = data || [];
         
-        // Sorting Logic: 
-        // 1. Date (Ascending)
-        // 2. sort_order (Manual drag-and-drop order)
-        // 3. Importance (Backup)
+        // Sort: Date First, then Manual Order (importance_ranking)
         tasks.sort((a, b) => {
             const dateA = new Date(a.due_date);
             const dateB = new Date(b.due_date);
             if (dateA - dateB !== 0) return dateA - dateB;
-            if ((a.importance_ranking || 0) !== (b.importance_ranking || 0)) return (a.importance_ranking || 0) - (b.importance_ranking || 0); // Using this as manual order
-            return b.importance - a.importance;
+            return (a.importance_ranking || 0) - (b.importance_ranking || 0);
         });
 
         render();
@@ -136,32 +133,37 @@
         const sDate = document.getElementById('stepDate').value || gDate;
         const sMins = parseInt(document.getElementById('stepMins').value);
 
-        if (!goal || !imp || !gDate || !sTitle || !sMins) return alert("All fields required.");
-        if (sMins > 15) return alert("Break it down further! (Max 15m)");
+        if (!goal || !imp || !gDate || !sTitle || !sMins) return alert("Fill all fields!");
+        if (sMins > 15) return alert("Break it down! Max 15 mins.");
         if (new Date(sDate) > new Date(gDate)) return alert("Sub-action cannot be after Goal deadline.");
 
-        await client.from('subtasks').insert([{
-            title: `${goal}: ${sTitle}`,
-            importance: imp,
-            duration: sMins,
-            due_date: sDate,
-            completed: false,
-            importance_ranking: tasks.length // Temporary use of field for order
-        }]);
+        try {
+            const { error } = await client.from('subtasks').insert([{
+                title: `${goal}: ${sTitle}`,
+                importance: imp,
+                duration: sMins,
+                due_date: sDate,
+                completed: false,
+                importance_ranking: tasks.length
+            }]);
 
-        document.getElementById('stepTitle').value = '';
-        refresh();
+            if (error) throw error;
+            document.getElementById('stepTitle').value = '';
+            document.getElementById('stepMins').value = '';
+            await refresh();
+        } catch (err) {
+            alert("Error: " + err.message);
+        }
     }
 
     async function updateManualOrder() {
         const items = document.querySelectorAll('.task-item');
-        const updates = Array.from(items).map((item, index) => {
-            return client.from('subtasks')
-                .update({ importance_ranking: index }) // Re-purposing an existing int field for order
-                .eq('id', item.dataset.id);
-        });
-        await Promise.all(updates);
-        refresh();
+        // Update each item's position in the DB based on current UI order
+        for (let i = 0; i < items.length; i++) {
+            const id = items[i].dataset.id;
+            await client.from('subtasks').update({ importance_ranking: i }).eq('id', id);
+        }
+        await refresh();
     }
 
     async function completeTask(id) {
@@ -169,8 +171,12 @@
         refresh();
     }
 
+    async function undoTask(id) {
+        await client.from('subtasks').update({ completed: false }).eq('id', id);
+        refresh();
+    }
+
     async function completeSpotlight() { if (tasks.length > 0) completeTask(tasks[0].id); }
-    async function undoTask(id) { await client.from('subtasks').update({ completed: false }).eq('id', id); refresh(); }
 
     async function renderHistory() {
         const { data } = await client.from('subtasks').select('*').eq('completed', true).order('id', {ascending: false}).limit(2);
@@ -196,7 +202,7 @@
             document.getElementById('spotlightDetails').innerText = `Imp: ${t.importance} | ${t.duration}m | Due: ${formatDate(t.due_date)}`;
         } else {
             document.getElementById('spotlightTitle').innerText = "All Actions Done";
-            document.getElementById('spotlightDetails').innerText = "Process a new goal to continue.";
+            document.getElementById('spotlightDetails').innerText = "Ready for a new goal.";
         }
 
         tasks.forEach(t => {
