@@ -16,7 +16,7 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
             background: var(--bg);
             color: var(--text);
             margin: 0;
@@ -40,13 +40,14 @@
         .spotlight-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 2px; opacity: 0.7; }
         .spotlight-task { font-size: 1.8rem; font-weight: 700; margin: 15px 0; display: block; }
         
-        /* INPUT AREA */
+        /* CARDS */
         .card {
             background: var(--card);
             padding: 25px;
             border-radius: 15px;
             border: 1px solid #e2e8f0;
             margin-bottom: 25px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
         }
 
         .grid-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
@@ -63,11 +64,10 @@
             font-weight: 600;
             border: none;
             cursor: pointer;
-            transition: transform 0.1s;
         }
 
-        button:active { transform: scale(0.98); }
         button.done-btn { background: #10b981; margin-top: 10px; padding: 10px 30px; }
+        button.finish-btn { background: #64748b; margin-top: 10px; }
 
         /* TASK LISTING */
         .task-row {
@@ -95,46 +95,51 @@
 
         .hidden { display: none; }
         h2 { font-size: 1rem; color: #64748b; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .step-counter { color: var(--accent); font-weight: bold; margin-bottom: 10px; display: block; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div id="spotlight">
-        <span class="spotlight-label">Your Next Step</span>
-        <span id="spotlightTitle" class="spotlight-task">Scanning your universe...</span>
+        <span class="spotlight-label">Current Next Action</span>
+        <span id="spotlightTitle" class="spotlight-task">Scanning...</span>
         <div id="spotlightDetails" style="font-size: 0.9rem; opacity: 0.8;"></div>
-        <button class="done-btn" onclick="completeSpotlight()">Complete Task</button>
+        <button class="done-btn" onclick="completeSpotlight()">Done - Move to Next</button>
     </div>
 
     <div class="card" id="inputPanel">
-        <h2>Capture & Clarify</h2>
-        <input id="title" placeholder="Actionable Title (e.g., 'Buy groceries', 'Email boss')" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
+        <h2>Capture New Project or Task</h2>
+        <input id="title" placeholder="What's on your mind?" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
         <div class="grid-inputs">
             <input type="date" id="dueDate">
             <select id="importance">
-                <option value="1">Importance: Low (1)</option>
-                <option value="5" selected>Importance: Med (5)</option>
-                <option value="10">Importance: Critical (10)</option>
+                <option value="1">Low (1)</option>
+                <option value="5" selected>Med (5)</option>
+                <option value="10">Critical (10)</option>
             </select>
             <select id="duration">
-                <option value="5">Time: 5m</option>
-                <option value="15">Time: 15m</option>
-                <option value="30">Time: 30m+</option>
+                <option value="5">Short (5m)</option>
+                <option value="15">Medium (15m)</option>
+                <option value="30">Long / Project (30m+)</option>
             </select>
         </div>
-        <button onclick="handleAdd()" style="width:100%;">Add to System</button>
+        <button onclick="handleAdd()" style="width:100%;">Process Entry</button>
     </div>
 
     <div class="card hidden" id="breakdownPanel" style="border: 2px solid var(--accent);">
-        <h2 style="color:var(--accent)">Break it down!</h2>
-        <p style="font-size:0.8rem">This task is too big for a single 'Next Action'. Define the first two physical steps:</p>
-        <input id="sub1" placeholder="Step 1 (e.g. Find the phone number)" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
-        <input id="sub2" placeholder="Step 2 (e.g. Call and schedule)" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
-        <button onclick="saveBreakdown()" style="width:100%;">Create Tiny Actions</button>
+        <h2 id="breakdownHeader" style="color:var(--accent)">Breaking Down Project</h2>
+        <span class="step-counter" id="stepCounter">Step #1</span>
+        <p id="breakdownInstructions" style="font-size:0.85rem; margin-bottom:15px;">What is the <strong>very next physical action</strong> required to move this forward?</p>
+        
+        <input id="subtaskTitle" placeholder="e.g., 'Draft email to Sarah'" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
+        
+        <button onclick="addSubtask()" style="width:100%;">Add Step & Identify Next</button>
+        <button class="finish-btn" onclick="finishBreakdown()" style="width:100%;">I've broken it down enough</button>
     </div>
 
-    <h2>The Master List</h2>
+    <h2>Action Inventory</h2>
     <div id="masterList"></div>
 </div>
 
@@ -146,7 +151,10 @@
 
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
     let allTasks = [];
-    let currentBreakdownParent = null;
+    
+    // State for breakdown mode
+    let projectContext = null;
+    let stepCount = 1;
 
     window.onload = refresh;
 
@@ -154,7 +162,7 @@
         const { data } = await client.from('subtasks').select('*').eq('completed', false);
         allTasks = data || [];
         
-        // Sort: Importance (High to Low), then Due Date (Soonest first)
+        // GTD Sort: Importance (High to Low), then Due Date
         allTasks.sort((a, b) => {
             if (b.importance !== a.importance) return b.importance - a.importance;
             return new Date(a.due_date) - new Date(b.due_date);
@@ -172,35 +180,59 @@
         if (!title || !dueDate) return alert("Title and Date are required!");
 
         if (duration >= 30) {
-            currentBreakdownParent = { title, importance, dueDate };
+            // Enter Breakdown Mode
+            projectContext = { title, importance, dueDate };
+            stepCount = 1;
+            
             document.getElementById('inputPanel').classList.add('hidden');
             document.getElementById('breakdownPanel').classList.remove('hidden');
+            document.getElementById('breakdownHeader').innerText = `Breaking Down: ${title}`;
+            updateStepCounter();
         } else {
             saveToDb(title, importance, duration, dueDate);
         }
+    }
+
+    function updateStepCounter() {
+        document.getElementById('stepCounter').innerText = `Physical Action #${stepCount}`;
+        document.getElementById('subtaskTitle').value = '';
+        document.getElementById('subtaskTitle').focus();
+    }
+
+    async function addSubtask() {
+        const subTitle = document.getElementById('subtaskTitle').value;
+        if (!subTitle) return alert("What is the physical action?");
+
+        // We save each subtask with a slightly declining importance 
+        // to ensure the FIRST step entered stays at the top of the spotlight
+        const adjustedImportance = Math.max(1, projectContext.importance - (stepCount * 0.1));
+
+        await client.from('subtasks').insert([{
+            title: subTitle,
+            importance: adjustedImportance,
+            duration: 10,
+            due_date: projectContext.dueDate,
+            completed: false
+        }]);
+
+        stepCount++;
+        updateStepCounter();
+        refresh(); // Refresh list in background
+    }
+
+    function finishBreakdown() {
+        document.getElementById('inputPanel').classList.remove('hidden');
+        document.getElementById('breakdownPanel').classList.add('hidden');
+        document.getElementById('title').value = '';
+        projectContext = null;
+        refresh();
     }
 
     async function saveToDb(title, importance, duration, dueDate) {
         await client.from('subtasks').insert([{
             title, importance, duration, due_date: dueDate, completed: false
         }]);
-        reset();
-        refresh();
-    }
-
-    async function saveBreakdown() {
-        const s1 = document.getElementById('sub1').value;
-        const s2 = document.getElementById('sub2').value;
-        if (!s1 || !s2) return alert("Provide both steps!");
-
-        await client.from('subtasks').insert([
-            { title: s1, importance: currentBreakdownParent.importance + 1, duration: 15, due_date: currentBreakdownParent.dueDate },
-            { title: s2, importance: currentBreakdownParent.importance, duration: 15, due_date: currentBreakdownParent.dueDate }
-        ]);
-
-        document.getElementById('inputPanel').classList.remove('hidden');
-        document.getElementById('breakdownPanel').classList.add('hidden');
-        reset();
+        document.getElementById('title').value = '';
         refresh();
     }
 
@@ -213,12 +245,6 @@
         if (allTasks.length > 0) completeTask(allTasks[0].id);
     }
 
-    function reset() {
-        document.getElementById('title').value = '';
-        document.getElementById('sub1').value = '';
-        document.getElementById('sub2').value = '';
-    }
-
     function render() {
         const spotlightTitle = document.getElementById('spotlightTitle');
         const spotlightDetails = document.getElementById('spotlightDetails');
@@ -227,17 +253,15 @@
         masterList.innerHTML = '';
 
         if (allTasks.length === 0) {
-            spotlightTitle.innerText = "Nothing Left! 🎉";
-            spotlightDetails.innerText = "The horizon is clear.";
+            spotlightTitle.innerText = "Inbox Zero! ☕";
+            spotlightDetails.innerText = "Everything is processed.";
             return;
         }
 
-        // Top Action
         const top = allTasks[0];
         spotlightTitle.innerText = top.title;
-        spotlightDetails.innerText = `Due: ${top.due_date} | Importance: ${top.importance} | Time: ${top.duration}m`;
+        spotlightDetails.innerText = `Priority: ${top.importance} | Due: ${top.due_date}`;
 
-        // List
         allTasks.forEach(t => {
             const row = document.createElement('div');
             row.className = `task-row ${t.importance >= 8 ? 'high-priority' : ''}`;
@@ -245,7 +269,7 @@
                 <div class="task-info">
                     <span class="task-title">${t.title}</span>
                     <div class="task-meta">
-                        <span class="badge">Importance: ${t.importance}</span>
+                        <span class="badge">Imp: ${Math.round(t.importance)}</span>
                         <span class="badge">${t.duration}m</span>
                         <span>📅 ${t.due_date}</span>
                     </div>
