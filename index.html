@@ -3,88 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Life GTD | Precise Action Engine</title>
+    <title>ActionStream | 15m GTD</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <style>
-        :root { --bg: #f3f4f6; --card: #ffffff; --primary: #1e293b; --accent: #3b82f6; --danger: #ef4444; --text: #334155; }
+        :root { --bg: #f0f2f5; --card: #ffffff; --primary: #0f172a; --accent: #3b82f6; --text: #334155; }
         body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 700px; padding: 40px 20px; }
+        .container { width: 100%; max-width: 600px; padding: 40px 20px; }
         
         #spotlight {
-            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-            color: white; padding: 40px; border-radius: 20px; margin-bottom: 30px; text-align: center;
-            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+            background: var(--primary); color: white; padding: 40px; border-radius: 24px; 
+            margin-bottom: 30px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.1);
         }
-        .spotlight-task { font-size: 1.8rem; font-weight: 700; margin: 15px 0; display: block; }
+        .spotlight-task { font-size: 1.6rem; font-weight: 700; margin: 15px 0; color: #fff; }
         
-        .card { background: var(--card); padding: 25px; border-radius: 15px; border: 1px solid #e2e8f0; margin-bottom: 25px; }
-        .grid-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .card { background: var(--card); padding: 25px; border-radius: 16px; border: 1px solid #e2e8f0; margin-bottom: 25px; }
         
-        input, select, button { padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 14px; box-sizing: border-box; }
-        button { background: var(--accent); color: white; font-weight: 600; border: none; cursor: pointer; }
-        button.done-btn { background: #10b981; margin-top: 10px; padding: 10px 30px; }
-        button.finish-btn { background: #64748b; margin-top: 10px; }
+        .input-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+        input, select, button { padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 14px; flex: 1; }
+        
+        button { background: var(--accent); color: white; font-weight: 600; border: none; cursor: pointer; min-width: 120px; }
+        button.add-step { background: #10b981; }
+        button.finish { background: #64748b; }
+        button.complete { background: #fff; color: var(--primary); margin-top: 15px; width: 100%; }
 
-        .task-row {
-            display: flex; align-items: center; padding: 15px; background: white; border-radius: 12px;
-            margin-bottom: 10px; border-left: 5px solid #cbd5e1;
+        .task-list { margin-top: 20px; }
+        .task-item { 
+            display: flex; align-items: center; padding: 16px; background: white; 
+            border-radius: 12px; margin-bottom: 8px; border: 1px solid #e2e8f0;
         }
-        .task-row.high-priority { border-left-color: var(--danger); }
         .task-info { flex: 1; }
-        .task-meta { font-size: 0.75rem; color: #64748b; margin-top: 4px; }
-        .badge { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: #f1f5f9; margin-right: 5px; }
+        .task-meta { font-size: 0.75rem; color: #94a3b8; }
+        .importance-tag { 
+            font-weight: 800; padding: 2px 8px; border-radius: 4px; 
+            background: #fee2e2; color: #ef4444; margin-right: 8px;
+        }
         .hidden { display: none; }
+        .warning { color: #ef4444; font-size: 0.8rem; margin-top: -5px; margin-bottom: 10px; font-weight: 600; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div id="spotlight">
-        <span style="opacity: 0.7; font-size: 0.8rem; text-transform: uppercase;">Next Action</span>
-        <span id="spotlightTitle" class="spotlight-task">Loading...</span>
-        <div id="spotlightDetails" style="font-size: 0.9rem; opacity: 0.8;"></div>
-        <button class="done-btn" onclick="completeSpotlight()">Complete & Move On</button>
+        <div style="font-size: 0.8rem; text-transform: uppercase; opacity: 0.6; letter-spacing: 1px;">Top Action Priority</div>
+        <div id="spotlightTitle" class="spotlight-task">No actions available.</div>
+        <div id="spotlightDetails" style="font-size: 0.85rem; opacity: 0.8;">Add a task to begin.</div>
+        <button class="complete" onclick="completeSpotlight()">Mark Completed</button>
     </div>
 
-    <div class="card" id="inputPanel">
-        <h2 style="font-size: 1rem; margin-bottom:15px;">Capture New Task/Project</h2>
-        <input id="title" placeholder="What needs to happen?" style="width:100%; margin-bottom:10px;">
-        <div class="grid-inputs">
-            <input type="date" id="dueDate">
-            <select id="importance">
-                <option value="1">Low (1)</option>
-                <option value="5" selected>Med (5)</option>
-                <option value="10">High (10)</option>
-            </select>
-            <select id="duration">
-                <option value="15">Small Task</option>
-                <option value="45">Big Project (Breakdown)</option>
-            </select>
-        </div>
-        <button onclick="handleAdd()" style="width:100%;">Add to System</button>
-    </div>
-
-    <div class="card hidden" id="breakdownPanel" style="border: 2px solid var(--accent);">
-        <h2 id="breakdownHeader" style="color:var(--accent); font-size: 1rem;">Breaking Down</h2>
-        <p style="font-size:0.85rem;">Assign a specific date and time for this step:</p>
+    <div class="card" id="processingCard">
+        <h2 id="flowHeader" style="font-size: 1rem; margin-bottom:15px;">Capture New Concept</h2>
         
-        <input id="subtaskTitle" placeholder="Next physical step..." style="width:100%; margin-bottom:10px;">
-        <div class="grid-inputs">
-            <input type="date" id="subtaskDate">
-            <input type="number" id="subtaskMinutes" placeholder="Mins" value="15">
-            <select id="subtaskImp">
-                <option value="1">Low</option>
-                <option value="5" selected>Med</option>
-                <option value="10">High</option>
-            </select>
-        </div>
+        <input id="currentTitle" placeholder="What is the goal/project?" style="width:100%; margin-bottom:10px;">
         
-        <button onclick="addSubtask()" style="width:100%;">Add Step & Create Another</button>
-        <button class="finish-btn" onclick="finishBreakdown()" style="width:100%;">Finish Project Setup</button>
+        <div id="stepInputs">
+            <div class="input-row">
+                <input id="stepTitle" placeholder="Physical step (e.g., 'Draft email')">
+            </div>
+            <div class="input-row">
+                <input type="date" id="stepDate">
+                <input type="number" id="stepMinutes" placeholder="Mins (max 15)" max="15">
+                <select id="stepImp">
+                    <option value="" disabled selected>Imp (1-10)</option>
+                    <option value="1">1 (Low)</option><option value="5">5</option><option value="10">10 (High)</option>
+                </select>
+            </div>
+            <div id="limitWarning" class="warning hidden">⚠️ GTD Rule: Tasks must be ≤ 15 minutes.</div>
+            
+            <div style="display:flex; gap:10px;">
+                <button class="add-step" onclick="saveStep()">Add Step</button>
+                <button class="finish" onclick="resetFlow()">Done Processing</button>
+            </div>
+        </div>
     </div>
 
-    <h2 style="font-size: 0.9rem; color: #64748b; text-transform: uppercase;">Your Action List</h2>
-    <div id="masterList"></div>
+    <h2 style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase;">Upcoming Action Inventory</h2>
+    <div id="inventory" class="task-list"></div>
 </div>
 
 <script>
@@ -94,77 +89,63 @@
     };
 
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
-    let allTasks = [];
-    let projectContext = null;
+    let allActions = [];
 
     window.onload = refresh;
 
     async function refresh() {
-        // Fetching with explicit column naming to avoid 400 errors
-        const { data, error } = await client.from('subtasks').select('*').eq('completed', false);
-        if (error) console.error("Refresh Error:", error);
+        const { data } = await client.from('subtasks').select('*').eq('completed', false);
+        allActions = data || [];
         
-        allTasks = data || [];
-        allTasks.sort((a, b) => {
-            if (b.importance !== a.importance) return b.importance - a.importance;
-            return new Date(a.due_date) - new Date(b.due_date);
+        // Spotlight Logic: Closest Date + Highest Importance
+        allActions.sort((a, b) => {
+            const dateA = new Date(a.due_date);
+            const dateB = new Date(b.due_date);
+            if (dateA - dateB !== 0) return dateA - dateB;
+            return b.importance - a.importance;
         });
+
         render();
     }
 
-    function handleAdd() {
-        const title = document.getElementById('title').value;
-        const importance = parseInt(document.getElementById('importance').value);
-        const duration = parseInt(document.getElementById('duration').value);
-        const dueDate = document.getElementById('dueDate').value;
+    async function saveStep() {
+        const goal = document.getElementById('currentTitle').value;
+        const title = document.getElementById('stepTitle').value;
+        const mins = parseInt(document.getElementById('stepMinutes').value);
+        const imp = parseInt(document.getElementById('stepImp').value);
+        const date = document.getElementById('stepDate').value;
 
-        if (!title || !dueDate) return alert("Fill in title and date.");
-
-        if (duration >= 30) {
-            projectContext = { title, importance, dueDate };
-            document.getElementById('inputPanel').classList.add('hidden');
-            document.getElementById('breakdownPanel').classList.remove('hidden');
-            document.getElementById('breakdownHeader').innerText = `Breakdown: ${title}`;
-            document.getElementById('subtaskDate').value = dueDate; // Default to project date
-        } else {
-            saveToDb(title, importance, duration, dueDate);
+        if (mins > 15) {
+            document.getElementById('limitWarning').classList.remove('hidden');
+            return;
         }
-    }
 
-    async function addSubtask() {
-        const subTitle = document.getElementById('subtaskTitle').value;
-        const subDate = document.getElementById('subtaskDate').value;
-        const subMins = parseInt(document.getElementById('subtaskMinutes').value);
-        const subImp = parseInt(document.getElementById('subtaskImp').value);
+        if (!title || !mins || !imp || !date) return alert("Please fill all step fields.");
 
-        if (!subTitle || !subDate) return alert("Step title and date required.");
+        document.getElementById('limitWarning').classList.add('hidden');
+
+        // Combine goal and step for clarity
+        const finalTitle = goal ? `${goal}: ${title}` : title;
 
         await client.from('subtasks').insert([{
-            title: subTitle,
-            importance: subImp,
-            duration: subMins,
-            due_date: subDate,
+            title: finalTitle,
+            importance: imp,
+            duration: mins,
+            due_date: date,
             completed: false
         }]);
 
-        document.getElementById('subtaskTitle').value = '';
+        // Keep goal but clear step for rapid entry
+        document.getElementById('stepTitle').value = '';
+        document.getElementById('stepTitle').focus();
         refresh();
     }
 
-    function finishBreakdown() {
-        document.getElementById('inputPanel').classList.remove('hidden');
-        document.getElementById('breakdownPanel').classList.add('hidden');
-        document.getElementById('title').value = '';
-        projectContext = null;
-        refresh();
-    }
-
-    async function saveToDb(title, importance, duration, dueDate) {
-        const { error } = await client.from('subtasks').insert([{
-            title, importance, duration, due_date: dueDate, completed: false
-        }]);
-        if (error) alert("Database Error: " + error.message);
-        document.getElementById('title').value = '';
+    function resetFlow() {
+        document.getElementById('currentTitle').value = '';
+        document.getElementById('stepTitle').value = '';
+        document.getElementById('stepMinutes').value = '';
+        document.getElementById('stepDate').value = '';
         refresh();
     }
 
@@ -174,38 +155,35 @@
     }
 
     async function completeSpotlight() {
-        if (allTasks.length > 0) completeTask(allTasks[0].id);
+        if (allActions.length > 0) completeTask(allActions[0].id);
     }
 
     function render() {
-        const masterList = document.getElementById('masterList');
-        masterList.innerHTML = '';
+        const inventory = document.getElementById('inventory');
+        inventory.innerHTML = '';
 
-        if (allTasks.length === 0) {
-            document.getElementById('spotlightTitle').innerText = "Clear Skies!";
-            document.getElementById('spotlightDetails').innerText = "All tasks completed.";
-            return;
+        if (allActions.length > 0) {
+            const top = allActions[0];
+            document.getElementById('spotlightTitle').innerText = top.title;
+            document.getElementById('spotlightDetails').innerText = `${top.duration}m | Imp: ${top.importance} | Due: ${top.due_date}`;
+        } else {
+            document.getElementById('spotlightTitle').innerText = "Nothing Scheduled";
+            document.getElementById('spotlightDetails').innerText = "Ready for the next concept.";
         }
 
-        const top = allTasks[0];
-        document.getElementById('spotlightTitle').innerText = top.title;
-        document.getElementById('spotlightDetails').innerText = `Due: ${top.due_date} | Time: ${top.duration}m`;
-
-        allTasks.forEach(t => {
-            const row = document.createElement('div');
-            row.className = `task-row ${t.importance >= 8 ? 'high-priority' : ''}`;
-            row.innerHTML = `
+        allActions.forEach(t => {
+            const item = document.createElement('div');
+            item.className = 'task-item';
+            item.innerHTML = `
                 <div class="task-info">
-                    <span class="task-title">${t.title}</span>
-                    <div class="task-meta">
-                        <span class="badge">Imp: ${t.importance}</span>
-                        <span class="badge">${t.duration}m</span>
-                        <span>📅 ${t.due_date}</span>
+                    <div style="font-weight:600; font-size:0.9rem;">
+                        <span class="importance-tag">! ${t.importance}</span>${t.title}
                     </div>
+                    <div class="task-meta">⏱️ ${t.duration}m | 📅 ${t.due_date}</div>
                 </div>
-                <input type="checkbox" style="transform: scale(1.5)" onclick="completeTask('${t.id}')">
+                <input type="checkbox" style="width:20px; height:20px; cursor:pointer;" onclick="completeTask('${t.id}')">
             `;
-            masterList.appendChild(row);
+            inventory.appendChild(item);
         });
     }
 </script>
