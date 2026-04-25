@@ -7,10 +7,10 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
-        :root { --bg: #f8fafc; --card: #ffffff; --primary: #0f172a; --accent: #2563eb; --text: #1e293b; --error: #ef4444; }
+        :root { --bg: #f8fafc; --card: #ffffff; --primary: #0f172a; --accent: #2563eb; --text: #1e293b; --error: #ef4444; --success: #10b981; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 12px; }
-        .container { max-width: 500px; margin: auto; padding-bottom: 50px; }
+        .container { max-width: 500px; margin: auto; padding-bottom: 80px; }
 
         /* SPOTLIGHT */
         #spotlight { 
@@ -19,130 +19,104 @@
         }
         .spotlight-task { font-size: 1.6rem; font-weight: 800; margin: 10px 0; line-height: 1.1; }
         
-        /* CARDS */
         .card { background: var(--card); padding: 20px; border-radius: 18px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
-        .section-title { font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 15px; display: block; }
+        .section-title { font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1.2px; margin: 25px 0 15px; display: block; }
         
         input, select, button { padding: 14px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; width: 100%; margin-bottom: 12px; outline: none; }
         button { background: var(--accent); color: white; font-weight: 700; border: none; cursor: pointer; }
         
         .planning-mode { border: 2px solid var(--accent); background: #f0f7ff; }
-        .row { display: flex; gap: 12px; }
+        .row { display: flex; gap: 10px; }
         .row > div { flex: 1; }
         .field-label { font-size: 0.75rem; font-weight: 600; color: #475569; margin-bottom: 4px; display: block; }
 
         .staged-item { display: flex; align-items: center; padding: 14px; background: white; border: 1px solid #bfdbfe; border-radius: 12px; margin-bottom: 8px; }
         .recur-pill { background: #dcfce7; color: #166534; font-size: 0.65rem; padding: 3px 8px; border-radius: 6px; font-weight: 800; margin-left: 8px; text-transform: uppercase; }
-        .recur-link { font-size: 0.85rem; color: var(--accent); cursor: pointer; text-decoration: underline; background: none; border: none; width: auto; margin: 0 0 12px 0; padding: 0; display: inline-block; }
+        .recur-link { font-size: 0.85rem; color: var(--accent); cursor: pointer; text-decoration: underline; background: none; border: none; width: auto; margin-bottom: 12px; display: inline-block; }
 
-        .inventory-item { display: flex; align-items: center; padding: 16px; background: white; border-radius: 16px; margin-bottom: 10px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .imp-num { font-weight: 900; color: var(--accent); font-size: 1.2rem; min-width: 40px; }
-        .checkbox { width: 34px; height: 34px; border-radius: 10px; accent-color: var(--accent); cursor: pointer; }
-        .hidden { display: none; }
+        .inventory-item { display: flex; align-items: center; padding: 16px; background: white; border-radius: 16px; margin-bottom: 10px; border: 1px solid #e2e8f0; }
+        .imp-num { font-weight: 900; color: var(--accent); font-size: 1.2rem; min-width: 35px; }
+        .checkbox { width: 34px; height: 34px; border-radius: 10px; accent-color: var(--accent); }
         
-        .error-msg { color: var(--error); font-size: 0.8rem; font-weight: 700; margin-bottom: 12px; text-align: center; display: none; padding: 12px; background: #fee2e2; border-radius: 10px; border: 1px solid #fecaca; }
+        .btn-edit { background: #f1f5f9; color: #475569; width: auto; padding: 8px 12px; font-size: 0.75rem; margin: 0; }
+        .btn-undo { background: #fee2e2; color: #ef4444; width: auto; padding: 6px 10px; font-size: 0.7rem; margin: 0; }
+        
+        .hidden { display: none; }
+        .error-msg { color: var(--error); font-size: 0.8rem; font-weight: 700; margin-bottom: 12px; text-align: center; display: none; padding: 12px; background: #fee2e2; border-radius: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div id="spotlight">
-        <span class="section-title" style="color: rgba(255,255,255,0.6)">Current Focus</span>
+        <span class="section-title" style="color: rgba(255,255,255,0.6); margin-top:0;">Top Priority</span>
         <div id="spotlightTitle" class="spotlight-task">...</div>
         <div id="spotlightDetails" style="font-size: 0.85rem; opacity: 0.85; margin-bottom: 20px;"></div>
-        <button id="spotlightBtn" style="background: white; color: var(--primary); border-radius: 14px; max-width: 260px; margin: auto; display: block;">Complete Now</button>
+        <button id="spotlightBtn" style="background: white; color: var(--primary); border-radius: 14px; max-width: 240px; margin: auto;">Complete Action</button>
     </div>
 
     <div class="card" id="goalCapture">
-        <span class="section-title">Stage 1: Define Project</span>
-        <input id="mainGoal" placeholder="Overall Project Name">
+        <span class="section-title" style="margin-top:0;">Stage 1: Define Goal</span>
+        <input id="mainGoal" placeholder="Project Name">
         <div class="row">
-            <div>
-                <label class="field-label">Goal Deadline</label>
-                <input type="date" id="goalDate">
-            </div>
-            <div>
-                <label class="field-label">Importance</label>
-                <select id="mainImp"></select>
-            </div>
+            <div><label class="field-label">Goal Deadline</label><input type="date" id="goalDate"></div>
+            <div><label class="field-label">Importance</label><select id="mainImp"></select></div>
         </div>
-        <button onclick="lockGoal()" style="margin-top: 10px;">Decompose Project</button>
+        <button onclick="lockGoal()">Start Breakdown</button>
     </div>
 
     <div class="card hidden planning-mode" id="planningArea">
-        <div style="border-bottom: 1px solid #bfdbfe; padding-bottom: 12px; margin-bottom: 18px;">
-            <h2 id="displayGoal" style="margin:0; font-size: 1.15rem; color: var(--primary); font-weight: 800;"></h2>
-            <div class="row" style="margin-top: 8px; align-items: center;">
-                <div style="flex:2">
-                    <label class="field-label" style="font-size: 0.65rem;">Final Deadline</label>
-                    <input type="date" id="activeGoalDeadline" style="padding: 8px; font-size: 0.8rem;" onchange="updateGoalDeadline(this.value)">
-                </div>
-                <div style="flex:1; text-align: right; font-weight: 900; color: var(--accent); font-size: 1.6rem;" id="displayImp"></div>
+        <div style="border-bottom: 1px solid #bfdbfe; padding-bottom: 12px; margin-bottom: 15px;">
+            <h2 id="displayGoal" style="margin:0; font-size: 1.1rem; font-weight: 800;"></h2>
+            <div class="row" style="margin-top: 5px; align-items: center;">
+                <div style="flex:2"><input type="date" id="activeGoalDeadline" style="font-size: 0.8rem; padding: 8px;" onchange="updateGoalDeadline(this.value)"></div>
+                <div style="flex:1; text-align: right; font-weight: 900; color: var(--accent); font-size: 1.4rem;" id="displayImp"></div>
             </div>
         </div>
 
-        <label class="field-label">Actionable Step</label>
-        <input id="stageTitle" placeholder="Next physical action">
-        
+        <input id="stageTitle" placeholder="Action Title">
         <div class="row">
-            <div>
-                <label class="field-label">Action Date</label>
-                <input type="date" id="stageDate">
-            </div>
-            <div>
-                <label class="field-label">Mins</label>
-                <input type="number" id="stageMins" placeholder="Max 15">
-            </div>
+            <div><label class="field-label">Action Date</label><input type="date" id="stageDate"></div>
+            <div><label class="field-label">Mins</label><input type="number" id="stageMins" placeholder="Max 15"></div>
         </div>
         
         <button class="recur-link" onclick="toggleRecur()">+ Set Recurrence</button>
-        <div id="recurContainer" class="hidden">
-            <select id="stageRecur" style="height: 50px;">
-                <option value="none">Once</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="fortnightly">Fortnightly</option>
-                <option value="monthly">Monthly</option>
-            </select>
-        </div>
+        <div id="recurContainer" class="hidden"><select id="stageRecur"><option value="none">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="fortnightly">Fortnightly</option><option value="monthly">Monthly</option></select></div>
 
         <div id="valError" class="error-msg"></div>
-        <button onclick="addToStaging()" style="background: #10b981;">Add to Staging</button>
+        <button id="addOrUpdateBtn" onclick="addToStaging()" style="background: var(--success);">Add Action</button>
 
         <div id="stagedList" style="margin: 20px 0;"></div>
-
         <div class="row">
-            <button onclick="finalisePlanning()" style="flex: 2;">Commit Strategy</button>
+            <button onclick="finalisePlanning()" style="flex: 2;">Commit Changes</button>
             <button onclick="cancelPlanning()" style="background: #ef4444; flex: 1;">Cancel</button>
         </div>
     </div>
 
     <span class="section-title">Active Inventory</span>
     <div id="masterInventory"></div>
+
+    <span class="section-title">Recently Completed</span>
+    <div id="historyList"></div>
 </div>
 
 <script>
-    const CONFIG = {
-        URL: "https://wuhklqulwhioiynoadtj.supabase.co",
-        KEY: "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx"
-    };
-
+    const CONFIG = { URL: "https://wuhklqulwhioiynoadtj.supabase.co", KEY: "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx" };
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
     let masterTasks = [];
+    let historyTasks = [];
     let stagingTasks = [];
     let activeGoal = null;
+    let editingId = null;
 
     window.onload = () => {
         const sel = document.getElementById('mainImp');
         for(let i=1; i<=10; i++) sel.options[sel.options.length] = new Option(i, i);
-        Sortable.create(document.getElementById('stagedList'), {
-            animation: 150,
-            onEnd: () => {
-                const items = Array.from(document.querySelectorAll('.staged-item'));
-                stagingTasks = items.map(el => stagingTasks[parseInt(el.dataset.idx)]);
-                renderStaging();
-            }
-        });
+        Sortable.create(document.getElementById('stagedList'), { animation: 150, onEnd: () => {
+            const items = Array.from(document.querySelectorAll('.staged-item'));
+            stagingTasks = items.map(el => stagingTasks[parseInt(el.dataset.idx)]);
+            renderStaging();
+        }});
         refresh();
     };
 
@@ -150,23 +124,20 @@
     function updateGoalDeadline(val) { if(activeGoal) activeGoal.date = val; }
 
     async function refresh() {
-        const { data, error } = await client.from('subtasks').select('*').eq('completed', false);
-        if (error) return console.error(error);
-        masterTasks = data || [];
-        masterTasks.sort((a, b) => {
-            const dateA = new Date(a.due_date);
-            const dateB = new Date(b.due_date);
-            if (dateA - dateB !== 0) return dateA - dateB;
-            return (a.importance_ranking || 0) - (b.importance_ranking || 0);
-        });
+        const { data: active } = await client.from('subtasks').select('*').eq('completed', false);
+        const { data: history } = await client.from('subtasks').select('*').eq('completed', true).order('created_at', { ascending: false }).limit(5);
+        masterTasks = active || [];
+        historyTasks = history || [];
+        masterTasks.sort((a, b) => new Date(a.due_date) - new Date(b.due_date) || (a.importance_ranking - b.importance_ranking));
         renderMaster();
+        renderHistory();
     }
 
     function lockGoal() {
         const goal = document.getElementById('mainGoal').value;
         const date = document.getElementById('goalDate').value;
         const imp = document.getElementById('mainImp').value;
-        if (!goal || !date) return alert("Project details incomplete.");
+        if (!goal || !date) return alert("Missing details.");
         activeGoal = { goal, date, imp };
         document.getElementById('displayGoal').innerText = goal;
         document.getElementById('displayImp').innerText = imp;
@@ -181,112 +152,105 @@
         const date = document.getElementById('stageDate').value;
         const mins = parseInt(document.getElementById('stageMins').value);
         const recur = document.getElementById('stageRecur').value;
-        const errDiv = document.getElementById('valError');
-
-        errDiv.style.display = 'none';
-        if (!title || !mins || !date) { showError("Details required."); return; }
-        if (mins > 15) { showError("GTD Limit: 15 mins max."); return; }
-        if (new Date(date) > new Date(activeGoal.date)) { showError("Step date exceeds goal deadline."); return; }
-
+        if (!title || !mins || !date || mins > 15) return showError("Check duration (max 15) and fields.");
+        
         stagingTasks.push({ title, date, mins, recur });
         document.getElementById('stageTitle').value = '';
-        document.getElementById('recurContainer').classList.add('hidden');
-        document.getElementById('stageRecur').value = 'none';
         renderStaging();
     }
 
-    function showError(msg) {
-        const errDiv = document.getElementById('valError');
-        errDiv.innerText = msg;
-        errDiv.style.display = 'block';
+    async function editTask(t) {
+        // Clear existing staging
+        stagingTasks = [];
+        editingId = t.id;
+        activeGoal = { goal: t.title.split(': ')[0], date: t.due_date, imp: t.importance };
+        
+        document.getElementById('displayGoal').innerText = activeGoal.goal;
+        document.getElementById('displayImp').innerText = t.importance;
+        document.getElementById('stageTitle').value = t.title.split(': ')[1] || t.title;
+        document.getElementById('stageDate').value = t.due_date;
+        document.getElementById('stageMins').value = t.duration;
+        document.getElementById('stageRecur').value = t.recurrence || 'none';
+        
+        document.getElementById('goalCapture').classList.add('hidden');
+        document.getElementById('planningArea').classList.remove('hidden');
+        document.getElementById('addOrUpdateBtn').innerText = "Update Existing Action";
+        document.getElementById('addOrUpdateBtn').onclick = async () => {
+            const updated = {
+                title: `${activeGoal.goal}: ${document.getElementById('stageTitle').value}`,
+                due_date: document.getElementById('stageDate').value,
+                duration: parseInt(document.getElementById('stageMins').value),
+                importance: parseInt(activeGoal.imp),
+                recurrence: document.getElementById('stageRecur').value
+            };
+            await client.from('subtasks').update(updated).eq('id', editingId);
+            cancelPlanning();
+            refresh();
+        };
     }
 
     function renderStaging() {
         const list = document.getElementById('stagedList');
-        list.innerHTML = stagingTasks.map((t, i) => `
-            <div class="staged-item" data-idx="${i}">
-                <div style="color:#cbd5e1; margin-right:15px; font-weight:bold; font-size: 1.2rem;">⋮⋮</div>
-                <div style="flex:1;">
-                    <div style="font-size:1rem; font-weight:700;">${t.title}${t.recur !== 'none' ? ` <span class="recur-pill">${t.recur}</span>` : ''}</div>
-                    <div style="font-size:0.8rem; color:#64748b; margin-top: 2px;">${t.date} • ${t.mins}m</div>
-                </div>
-            </div>
-        `).join('');
+        list.innerHTML = stagingTasks.map((t, i) => `<div class="staged-item" data-idx="${i}"><div style="flex:1;"><b>${t.title}</b><br><small>${t.date} • ${t.mins}m</small></div></div>`).join('');
     }
 
     async function finalisePlanning() {
-        if (stagingTasks.length === 0) return alert("Planning draft is empty.");
-        const toInsert = stagingTasks.map((t, index) => ({
-            title: `${activeGoal.goal}: ${t.title}`,
-            importance: parseInt(activeGoal.imp),
-            duration: parseInt(t.mins),
-            due_date: t.date,
-            completed: false,
-            importance_ranking: index,
-            recurrence: t.recur
-        }));
-
-        const { error } = await client.from('subtasks').insert(toInsert);
-        if (error) return alert("Sync Error: " + error.message);
-
-        stagingTasks = []; activeGoal = null;
-        document.getElementById('mainGoal').value = '';
-        document.getElementById('planningArea').classList.add('hidden');
-        document.getElementById('goalCapture').classList.remove('hidden');
+        if (stagingTasks.length === 0) return cancelPlanning();
+        const toInsert = stagingTasks.map((t, i) => ({ title: `${activeGoal.goal}: ${t.title}`, importance: activeGoal.imp, duration: t.mins, due_date: t.date, recurrence: t.recur, importance_ranking: i }));
+        await client.from('subtasks').insert(toInsert);
+        cancelPlanning();
         refresh();
     }
 
     async function completeTask(task) {
         if (task.recurrence && task.recurrence !== 'none') {
-            const nextDate = new Date(task.due_date);
-            if (task.recurrence === 'daily') nextDate.setDate(nextDate.getDate() + 1);
-            else if (task.recurrence === 'weekly') nextDate.setDate(nextDate.getDate() + 7);
-            else if (task.recurrence === 'fortnightly') nextDate.setDate(nextDate.getDate() + 14);
-            else if (task.recurrence === 'monthly') nextDate.setMonth(nextDate.getMonth() + 1);
-
-            await client.from('subtasks').insert([{
-                title: task.title, importance: task.importance, duration: task.duration,
-                due_date: nextDate.toISOString().split('T')[0], completed: false, 
-                recurrence: task.recurrence, importance_ranking: task.importance_ranking
-            }]);
+            const next = new Date(task.due_date);
+            if (task.recurrence === 'daily') next.setDate(next.getDate() + 1);
+            else if (task.recurrence === 'weekly') next.setDate(next.getDate() + 7);
+            await client.from('subtasks').insert([{ ...task, id: undefined, due_date: next.toISOString().split('T')[0], completed: false }]);
         }
         await client.from('subtasks').update({ completed: true }).eq('id', task.id);
         refresh();
     }
 
+    async function undoComplete(id) {
+        await client.from('subtasks').update({ completed: false }).eq('id', id);
+        refresh();
+    }
+
     function cancelPlanning() {
-        stagingTasks = []; activeGoal = null;
+        stagingTasks = []; activeGoal = null; editingId = null;
+        document.getElementById('addOrUpdateBtn').innerText = "Add Action";
+        document.getElementById('addOrUpdateBtn').onclick = addToStaging;
         document.getElementById('planningArea').classList.add('hidden');
         document.getElementById('goalCapture').classList.remove('hidden');
     }
 
+    function showError(m) { const e = document.getElementById('valError'); e.innerText = m; e.style.display = 'block'; setTimeout(() => e.style.display='none', 3000); }
+
     function renderMaster() {
-        const inv = document.getElementById('masterInventory');
-        inv.innerHTML = '';
-        const spotlightBtn = document.getElementById('spotlightBtn');
+        const inv = document.getElementById('masterInventory'); inv.innerHTML = '';
         if (masterTasks.length > 0) {
             const t = masterTasks[0];
             document.getElementById('spotlightTitle').innerText = t.title;
-            document.getElementById('spotlightDetails').innerText = `Imp: ${t.importance} | ${t.duration}m | Due: ${t.due_date}`;
-            spotlightBtn.onclick = () => completeTask(t);
-            spotlightBtn.style.display = 'block';
-        } else {
-            document.getElementById('spotlightTitle').innerText = "Inventory Clear";
-            document.getElementById('spotlightDetails').innerText = "Add a project to begin.";
-            spotlightBtn.style.display = 'none';
+            document.getElementById('spotlightDetails').innerText = `${t.duration}m | Due: ${t.due_date}`;
+            document.getElementById('spotlightBtn').onclick = () => completeTask(t);
         }
         masterTasks.forEach(t => {
-            const item = document.createElement('div');
-            item.className = 'inventory-item';
-            item.innerHTML = `
-                <div class="imp-num">${t.importance}</div>
-                <div style="flex:1; padding-right:12px;">
-                    <div style="font-weight:700; font-size:1rem;">${t.title}${t.recurrence && t.recurrence !== 'none' ? ` <span class="recur-pill">${t.recurrence}</span>` : ''}</div>
-                    <div style="font-size:0.8rem; color:#64748b; margin-top: 3px;">${t.due_date} • ${t.duration}m</div>
-                </div>
-                <input type="checkbox" class="checkbox" onclick='completeTask(${JSON.stringify(t)})'>
-            `;
-            inv.appendChild(item);
+            const d = document.createElement('div'); d.className = 'inventory-item';
+            d.innerHTML = `<div class="imp-num">${t.importance}</div><div style="flex:1"><b>${t.title}</b><br><small>${t.due_date} • ${t.duration}m</small></div>
+            <button class="btn-edit" onclick='editTask(${JSON.stringify(t)})'>Edit</button>
+            <input type="checkbox" class="checkbox" style="margin-left:10px;" onclick='completeTask(${JSON.stringify(t)})'>`;
+            inv.appendChild(d);
+        });
+    }
+
+    function renderHistory() {
+        const h = document.getElementById('historyList'); h.innerHTML = '';
+        historyTasks.forEach(t => {
+            const d = document.createElement('div'); d.className = 'inventory-item'; d.style.opacity = '0.6';
+            d.innerHTML = `<div style="flex:1"><strike>${t.title}</strike></div><button class="btn-undo" onclick="undoComplete(${t.id})">Undo</button>`;
+            h.appendChild(d);
         });
     }
 </script>
