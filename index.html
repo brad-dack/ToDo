@@ -3,77 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ActionStream | GTD Precision</title>
+    <title>ActionStream | Goal-Action Logic</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <style>
-        :root { --bg: #f8fafc; --card: #ffffff; --primary: #0f172a; --accent: #2563eb; --text: #1e293b; }
+        :root { --bg: #f1f5f9; --card: #ffffff; --primary: #0f172a; --accent: #2563eb; --text: #1e293b; }
         body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding-bottom: 50px; }
         .container { width: 100%; max-width: 700px; margin: auto; padding: 20px; }
         
+        /* SPOTLIGHT */
         #spotlight {
             background: var(--primary); color: white; padding: 35px; border-radius: 24px; 
             margin-bottom: 25px; text-align: center; box-shadow: 0 15px 30px -5px rgba(0,0,0,0.2);
         }
         .spotlight-task { font-size: 1.8rem; font-weight: 800; margin: 10px 0; line-height: 1.2; }
         
+        /* FORM STYLING */
         .card { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+        .goal-header { border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 20px; }
         .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
         
         input, select, button { padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 14px; width: 100%; box-sizing: border-box; }
         button { background: var(--accent); color: white; font-weight: 600; border: none; cursor: pointer; transition: 0.2s; }
-        button:hover { opacity: 0.9; }
-        button.undo { background: #64748b; font-size: 0.75rem; padding: 5px 10px; width: auto; }
-        button.complete-btn { background: #fff; color: var(--primary); margin-top: 15px; font-size: 1.1rem; }
-
+        
+        /* ACTION LIST */
         .task-item { 
             display: flex; align-items: center; padding: 14px; background: white; 
-            border-radius: 12px; margin-bottom: 8px; border: 1px solid #e2e8f0; border-left: 6px solid #cbd5e1;
+            border-radius: 12px; margin-bottom: 8px; border: 1px solid #e2e8f0;
         }
-        .priority-high { border-left-color: #ef4444; }
+        .importance-pill { 
+            background: var(--primary); color: white; padding: 4px 10px; 
+            border-radius: 6px; font-weight: 800; margin-right: 15px; font-size: 0.9rem;
+        }
         .task-info { flex: 1; }
         .task-meta { font-size: 0.75rem; color: #64748b; margin-top: 4px; }
+        
         .history-item { opacity: 0.6; display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #eee; }
         .hidden { display: none; }
+        .sub-label { font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: block; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div id="spotlight">
-        <div style="font-size: 0.75rem; text-transform: uppercase; opacity: 0.6; letter-spacing: 1.5px;">Next Action</div>
+        <div style="font-size: 0.75rem; text-transform: uppercase; opacity: 0.6; letter-spacing: 1.5px;">Current Focus</div>
         <div id="spotlightTitle" class="spotlight-task">...</div>
         <div id="spotlightDetails" style="font-size: 0.85rem; opacity: 0.8;"></div>
-        <button class="complete-btn" onclick="completeSpotlight()">Done</button>
+        <button onclick="completeSpotlight()" style="background: #fff; color: var(--primary); margin-top: 15px; width: 100%; border-radius: 12px;">Complete Task</button>
     </div>
 
     <div class="card">
-        <div class="grid" style="grid-template-columns: 2fr 1fr;">
-            <input id="mainGoal" placeholder="Primary Goal/Project">
-            <input type="date" id="goalDate">
+        <div class="goal-header">
+            <span class="sub-label">Step 1: Define Primary Goal</span>
+            <div style="display: grid; grid-template-columns: 2fr 0.8fr 0.8fr; gap: 10px;">
+                <input id="mainGoal" placeholder="Goal (e.g. Tax Return)">
+                <select id="mainImp">
+                    <option value="" disabled selected>Imp (1-10)</option>
+                    </select>
+                <input type="date" id="goalDate">
+            </div>
         </div>
         
-        <div style="background: #f1f5f9; padding: 15px; border-radius: 10px; margin-top: 10px;">
-            <input id="stepTitle" placeholder="Physical Action (e.g. 'Draft email')" style="margin-bottom:10px;">
+        <div>
+            <span class="sub-label">Step 2: Break into 15m Actions</span>
+            <input id="stepTitle" placeholder="Physical Action (e.g. 'Gather receipts')" style="margin-bottom:10px;">
             <div class="grid">
                 <input type="date" id="stepDate">
-                <input type="number" id="stepMins" placeholder="Mins (max 15)">
-                <select id="stepImp">
-                    <option value="" disabled selected>Importance</option>
-                    <option value="1">1</option><option value="2">2</option><option value="3">3</option>
-                    <option value="4">4</option><option value="5">5</option><option value="6">6</option>
-                    <option value="7">7</option><option value="8">8</option><option value="9">9</option>
-                    <option value="10">10</option>
-                </select>
+                <input type="number" id="stepMins" placeholder="Mins (Max 15)">
+                <button onclick="addStep()" style="background: #10b981;">Add to List</button>
             </div>
-            <button onclick="addStep()" style="background: #10b981; margin-top:10px;">Add Step to Inventory</button>
         </div>
     </div>
 
-    <h3 style="font-size: 0.8rem; color: #64748b; text-transform: uppercase;">Inventory</h3>
+    <h3 style="font-size: 0.8rem; color: #64748b; text-transform: uppercase;">Action Inventory (By Priority)</h3>
     <div id="inventory"></div>
 
-    <div id="historySection" class="card hidden" style="margin-top: 30px;">
-        <h3 style="font-size: 0.8rem; color: #64748b; text-transform: uppercase;">Recently Completed</h3>
+    <div id="historySection" class="card hidden">
+        <h3 style="font-size: 0.8rem; color: #64748b; text-transform: uppercase;">Undo</h3>
         <div id="historyList"></div>
     </div>
 </div>
@@ -87,7 +93,12 @@
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
     let tasks = [];
 
-    window.onload = refresh;
+    window.onload = () => {
+        // Populate importance dropdown 1-10
+        const sel = document.getElementById('mainImp');
+        for(let i=1; i<=10; i++) sel.options[sel.options.length] = new Option(i, i);
+        refresh();
+    };
 
     function formatDate(iso) {
         if (!iso) return "N/A";
@@ -101,12 +112,11 @@
         
         const now = new Date();
         tasks.sort((a, b) => {
-            const getScore = (t) => {
-                const diff = (new Date(t.due_date) - now) / (1000 * 60 * 60 * 24);
-                const weight = Math.max(0.1, diff + 1);
-                return t.importance / weight; // Gravity toward high importance + near date
+            const score = (t) => {
+                const diff = Math.max(0.1, (new Date(t.due_date) - now) / (1000 * 60 * 60 * 24));
+                return t.importance / (diff + 0.5); 
             };
-            return getScore(b) - getScore(a);
+            return score(b) - score(a);
         });
 
         render();
@@ -115,23 +125,28 @@
 
     async function addStep() {
         const goal = document.getElementById('mainGoal').value;
-        const title = document.getElementById('stepTitle').value;
-        const mins = parseInt(document.getElementById('stepMins').value);
-        const imp = parseInt(document.getElementById('stepImp').value);
-        const date = document.getElementById('stepDate').value || document.getElementById('goalDate').value;
+        const imp = parseInt(document.getElementById('mainImp').value);
+        const gDate = document.getElementById('goalDate').value;
+        
+        const sTitle = document.getElementById('stepTitle').value;
+        const sDate = document.getElementById('stepDate').value || gDate;
+        const sMins = parseInt(document.getElementById('stepMins').value);
 
-        if (!title || !mins || !imp || !date) return alert("All step fields required.");
-        if (mins > 15) return alert("GTD Violation: Task must be 15 mins or less.");
+        // Validations
+        if (!goal || !imp || !gDate || !sTitle || !sMins) return alert("Missing Goal or Step info!");
+        if (sMins > 15) return alert("Task must be 15 mins or less!");
+        if (new Date(sDate) > new Date(gDate)) return alert("Sub-task cannot be later than the Primary Goal date!");
 
         await client.from('subtasks').insert([{
-            title: goal ? `${goal}: ${title}` : title,
+            title: `${goal}: ${sTitle}`,
             importance: imp,
-            duration: mins,
-            due_date: date,
+            duration: sMins,
+            due_date: sDate,
             completed: false
         }]);
 
         document.getElementById('stepTitle').value = '';
+        document.getElementById('stepMins').value = '';
         refresh();
     }
 
@@ -140,31 +155,21 @@
         refresh();
     }
 
-    async function completeSpotlight() {
-        if (tasks.length > 0) completeTask(tasks[0].id);
-    }
-
-    async function undoTask(id) {
-        await client.from('subtasks').update({ completed: false }).eq('id', id);
-        refresh();
-    }
+    async function completeSpotlight() { if (tasks.length > 0) completeTask(tasks[0].id); }
+    async function undoTask(id) { await client.from('subtasks').update({ completed: false }).eq('id', id); refresh(); }
 
     async function renderHistory() {
-        const { data } = await client.from('subtasks').select('*').eq('completed', true).order('id', {ascending: false}).limit(3);
-        const histList = document.getElementById('historyList');
+        const { data } = await client.from('subtasks').select('*').eq('completed', true).order('id', {ascending: false}).limit(2);
         const histSection = document.getElementById('historySection');
-        
         if (data && data.length > 0) {
             histSection.classList.remove('hidden');
-            histList.innerHTML = data.map(t => `
+            document.getElementById('historyList').innerHTML = data.map(t => `
                 <div class="history-item">
-                    <span>${t.title}</span>
-                    <button class="undo" onclick="undoTask('${t.id}')">Undo</button>
+                    <span style="font-size:0.8rem">${t.title}</span>
+                    <button onclick="undoTask('${t.id}')" style="width:auto; padding:4px 10px; font-size:0.7rem; background:#64748b;">Undo</button>
                 </div>
             `).join('');
-        } else {
-            histSection.classList.add('hidden');
-        }
+        } else histSection.classList.add('hidden');
     }
 
     function render() {
@@ -174,19 +179,20 @@
         if (tasks.length > 0) {
             const t = tasks[0];
             document.getElementById('spotlightTitle').innerText = t.title;
-            document.getElementById('spotlightDetails').innerText = `Imp: ${t.importance} | ${t.duration}m | Due: ${formatDate(t.due_date)}`;
+            document.getElementById('spotlightDetails').innerText = `Priority: ${t.importance} | ${t.duration}m | Due: ${formatDate(t.due_date)}`;
         } else {
-            document.getElementById('spotlightTitle').innerText = "All Clear";
-            document.getElementById('spotlightDetails').innerText = "Nothing left to process.";
+            document.getElementById('spotlightTitle').innerText = "All Actions Done";
+            document.getElementById('spotlightDetails').innerText = "Process a new goal to continue.";
         }
 
         tasks.forEach(t => {
             const item = document.createElement('div');
-            item.className = `task-item ${t.importance >= 8 ? 'priority-high' : ''}`;
+            item.className = 'task-item';
             item.innerHTML = `
+                <div class="importance-pill">${t.importance}</div>
                 <div class="task-info">
-                    <div style="font-weight:700;">[${t.importance}] ${t.title}</div>
-                    <div class="task-meta">${t.duration} mins | Due: ${formatDate(t.due_date)}</div>
+                    <div style="font-weight:700;">${t.title}</div>
+                    <div class="task-meta">${t.duration}m | Due: ${formatDate(t.due_date)}</div>
                 </div>
                 <input type="checkbox" style="width:22px; height:22px;" onclick="completeTask('${t.id}')">
             `;
