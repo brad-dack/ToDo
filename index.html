@@ -3,144 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Next Action Engine</title>
+    <title>Life GTD | Next Action Engine</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <style>
         :root {
-            --bg: #f8f9fa;
+            --bg: #f3f4f6;
             --card: #ffffff;
-            --primary: #2563eb;
-            --text: #1e293b;
-            --accent: #f59e0b;
+            --primary: #1e293b;
+            --accent: #3b82f6;
+            --danger: #ef4444;
+            --text: #334155;
         }
 
         body {
-            font-family: 'Inter', system-ui, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: var(--bg);
             color: var(--text);
-            line-height: 1.5;
             margin: 0;
             display: flex;
             justify-content: center;
         }
 
-        .container {
-            width: 100%;
-            max-width: 600px;
-            padding: 40px 20px;
-        }
+        .container { width: 100%; max-width: 700px; padding: 40px 20px; }
 
-        header { margin-bottom: 30px; }
-        h1 { font-weight: 800; font-size: 1.5rem; letter-spacing: -0.025em; }
-
-        /* SPOTLIGHT SECTION */
+        /* THE SPOTLIGHT */
         #spotlight {
-            background: var(--primary);
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
             color: white;
-            padding: 30px;
-            border-radius: 16px;
+            padding: 40px;
+            border-radius: 20px;
             margin-bottom: 30px;
-            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.2);
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
         }
 
-        #spotlight .label { font-size: 0.75rem; text-transform: uppercase; opacity: 0.8; letter-spacing: 0.05em; }
-        #spotlight .task-name { font-size: 1.5rem; font-weight: 700; margin: 10px 0; }
-
+        .spotlight-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 2px; opacity: 0.7; }
+        .spotlight-task { font-size: 1.8rem; font-weight: 700; margin: 15px 0; display: block; }
+        
         /* INPUT AREA */
-        .input-group {
+        .card {
             background: var(--card);
-            padding: 20px;
-            border-radius: 12px;
+            padding: 25px;
+            border-radius: 15px;
             border: 1px solid #e2e8f0;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
         }
 
+        .grid-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
         input, select, button {
-            width: 100%;
             padding: 12px;
-            margin: 8px 0;
             border-radius: 8px;
             border: 1px solid #cbd5e1;
-            box-sizing: border-box;
+            font-size: 14px;
         }
 
         button {
-            background: var(--primary);
+            background: var(--accent);
             color: white;
             font-weight: 600;
             border: none;
             cursor: pointer;
-            transition: opacity 0.2s;
+            transition: transform 0.1s;
         }
 
-        button.secondary { background: #64748b; }
-        button:hover { opacity: 0.9; }
+        button:active { transform: scale(0.98); }
+        button.done-btn { background: #10b981; margin-top: 10px; padding: 10px 30px; }
 
-        /* LISTS */
-        .section-title { font-size: 0.9rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 15px; }
-        .task-item {
-            background: var(--card);
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #e2e8f0;
+        /* TASK LISTING */
+        .task-row {
             display: flex;
             align-items: center;
-            gap: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            border-left: 5px solid #cbd5e1;
         }
 
-        .task-item input[type="checkbox"] { width: auto; margin: 0; cursor: pointer; }
-        .task-meta { font-size: 0.8rem; color: #94a3b8; }
+        .task-row.high-priority { border-left-color: var(--danger); }
+        .task-info { flex: 1; }
+        .task-title { font-weight: 600; display: block; }
+        .task-meta { font-size: 0.75rem; color: #64748b; margin-top: 4px; }
         
+        .badge {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #f1f5f9;
+            margin-right: 5px;
+        }
+
         .hidden { display: none; }
-        .tag { font-size: 0.7rem; padding: 2px 8px; background: #e2e8f0; border-radius: 4px; color: #475569; }
+        h2 { font-size: 1rem; color: #64748b; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <header>
-        <h1>Next Action Engine</h1>
-    </header>
-
     <div id="spotlight">
-        <div class="label">Current Focus</div>
-        <div id="spotlightTitle" class="task-name">Loading your next move...</div>
-        <div id="spotlightMeta" class="label">---</div>
-        <button onclick="completeSpotlight()" style="background: white; color: var(--primary); margin-top: 15px;">Mark as Done</button>
+        <span class="spotlight-label">Your Next Step</span>
+        <span id="spotlightTitle" class="spotlight-task">Scanning your universe...</span>
+        <div id="spotlightDetails" style="font-size: 0.9rem; opacity: 0.8;"></div>
+        <button class="done-btn" onclick="completeSpotlight()">Complete Task</button>
     </div>
 
-    <div class="input-group" id="capturePanel">
-        <div class="section-title">Capture New Action</div>
-        <input id="taskTitle" placeholder="What is the very next physical step? (e.g. Call Bob)">
-        <div style="display: flex; gap: 10px;">
-            <select id="taskContext">
-                <option value="@Computer">@Computer</option>
-                <option value="@Phone">@Phone</option>
-                <option value="@Office">@Office</option>
-                <option value="@Errands">@Errands</option>
+    <div class="card" id="inputPanel">
+        <h2>Capture & Clarify</h2>
+        <input id="title" placeholder="Actionable Title (e.g., 'Buy groceries', 'Email boss')" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
+        <div class="grid-inputs">
+            <input type="date" id="dueDate">
+            <select id="importance">
+                <option value="1">Importance: Low (1)</option>
+                <option value="5" selected>Importance: Med (5)</option>
+                <option value="10">Importance: Critical (10)</option>
             </select>
-            <select id="taskTime">
-                <option value="5">5 min</option>
-                <option value="15">15 min</option>
-                <option value="30">30 min</option>
-                <option value="60">60+ min</option>
+            <select id="duration">
+                <option value="5">Time: 5m</option>
+                <option value="15">Time: 15m</option>
+                <option value="30">Time: 30m+</option>
             </select>
         </div>
-        <button onclick="processEntry()">Process into System</button>
+        <button onclick="handleAdd()" style="width:100%;">Add to System</button>
     </div>
 
-    <div id="breakdownPanel" class="input-group hidden">
-        <div class="section-title" style="color: var(--accent);">⚠️ Action too large!</div>
-        <p style="font-size: 0.85rem;">David Allen says: "If it takes more than 15 mins, it's a project." Break it into two tiny steps:</p>
-        <input id="substep1" placeholder="First tiny step...">
-        <input id="substep2" placeholder="Second tiny step...">
-        <button onclick="saveBreakdown()">Split Action</button>
-        <button class="secondary" onclick="cancelBreakdown()">Actually, I'll do it in one</button>
+    <div class="card hidden" id="breakdownPanel" style="border: 2px solid var(--accent);">
+        <h2 style="color:var(--accent)">Break it down!</h2>
+        <p style="font-size:0.8rem">This task is too big for a single 'Next Action'. Define the first two physical steps:</p>
+        <input id="sub1" placeholder="Step 1 (e.g. Find the phone number)" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
+        <input id="sub2" placeholder="Step 2 (e.g. Call and schedule)" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
+        <button onclick="saveBreakdown()" style="width:100%;">Create Tiny Actions</button>
     </div>
 
-    <div class="section-title">Available Actions</div>
-    <div id="actionList"></div>
+    <h2>The Master List</h2>
+    <div id="masterList"></div>
 </div>
 
 <script>
@@ -149,128 +144,117 @@
         KEY: "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx"
     };
 
-    let supabaseClient;
+    const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
     let allTasks = [];
-    let pendingBreakdown = null;
+    let currentBreakdownParent = null;
 
-    window.onload = () => {
-        supabaseClient = supabase.createClient(CONFIG.URL, CONFIG.KEY);
-        refreshUI();
-    };
+    window.onload = refresh;
 
-    async function refreshUI() {
-        const { data, error } = await supabaseClient
-            .from('subtasks') // Using your existing table name
-            .select('*')
-            .eq('completed', false)
-            .order('importance', { ascending: false });
-        
+    async function refresh() {
+        const { data } = await client.from('subtasks').select('*').eq('completed', false);
         allTasks = data || [];
+        
+        // Sort: Importance (High to Low), then Due Date (Soonest first)
+        allTasks.sort((a, b) => {
+            if (b.importance !== a.importance) return b.importance - a.importance;
+            return new Date(a.due_date) - new Date(b.due_date);
+        });
+
         render();
     }
 
-    function processEntry() {
-        const title = document.getElementById('taskTitle').value;
-        const time = parseInt(document.getElementById('taskTime').value);
-        const context = document.getElementById('taskContext').value;
+    function handleAdd() {
+        const title = document.getElementById('title').value;
+        const importance = parseInt(document.getElementById('importance').value);
+        const duration = parseInt(document.getElementById('duration').value);
+        const dueDate = document.getElementById('dueDate').value;
 
-        if (!title) return alert("Describe the action!");
+        if (!title || !dueDate) return alert("Title and Date are required!");
 
-        // THE GTD RULE: If it's too long, force a breakdown
-        if (time > 15) {
-            pendingBreakdown = { title, time, context };
-            document.getElementById('capturePanel').classList.add('hidden');
+        if (duration >= 30) {
+            currentBreakdownParent = { title, importance, dueDate };
+            document.getElementById('inputPanel').classList.add('hidden');
             document.getElementById('breakdownPanel').classList.remove('hidden');
         } else {
-            saveTask(title, time, context);
+            saveToDb(title, importance, duration, dueDate);
         }
     }
 
-    async function saveTask(title, duration, context) {
-        await supabaseClient.from('subtasks').insert([{
-            title: title,
-            duration: duration,
-            importance: 5, // Default
-            due_date: new Date().toISOString().split('T')[0],
-            completed: false
+    async function saveToDb(title, importance, duration, dueDate) {
+        await client.from('subtasks').insert([{
+            title, importance, duration, due_date: dueDate, completed: false
         }]);
-        
-        resetInputs();
-        refreshUI();
+        reset();
+        refresh();
     }
 
     async function saveBreakdown() {
-        const s1 = document.getElementById('substep1').value;
-        const s2 = document.getElementById('substep2').value;
-        
-        if(!s1 || !s2) return alert("Define both steps!");
+        const s1 = document.getElementById('sub1').value;
+        const s2 = document.getElementById('sub2').value;
+        if (!s1 || !s2) return alert("Provide both steps!");
 
-        await supabaseClient.from('subtasks').insert([
-            { title: s1, duration: 10, importance: 6 },
-            { title: s2, duration: 10, importance: 5 }
+        await client.from('subtasks').insert([
+            { title: s1, importance: currentBreakdownParent.importance + 1, duration: 15, due_date: currentBreakdownParent.dueDate },
+            { title: s2, importance: currentBreakdownParent.importance, duration: 15, due_date: currentBreakdownParent.dueDate }
         ]);
 
-        cancelBreakdown();
-        refreshUI();
-    }
-
-    function cancelBreakdown() {
-        pendingBreakdown = null;
-        document.getElementById('capturePanel').classList.remove('hidden');
+        document.getElementById('inputPanel').classList.remove('hidden');
         document.getElementById('breakdownPanel').classList.add('hidden');
-        resetInputs();
-    }
-
-    function resetInputs() {
-        document.getElementById('taskTitle').value = '';
-        document.getElementById('substep1').value = '';
-        document.getElementById('substep2').value = '';
+        reset();
+        refresh();
     }
 
     async function completeTask(id) {
-        await supabaseClient.from('subtasks').update({ completed: true }).eq('id', id);
-        refreshUI();
+        await client.from('subtasks').update({ completed: true }).eq('id', id);
+        refresh();
     }
 
     async function completeSpotlight() {
-        if (allTasks.length > 0) {
-            await completeTask(allTasks[0].id);
-        }
+        if (allTasks.length > 0) completeTask(allTasks[0].id);
+    }
+
+    function reset() {
+        document.getElementById('title').value = '';
+        document.getElementById('sub1').value = '';
+        document.getElementById('sub2').value = '';
     }
 
     function render() {
-        const listContainer = document.getElementById('actionList');
         const spotlightTitle = document.getElementById('spotlightTitle');
-        const spotlightMeta = document.getElementById('spotlightMeta');
+        const spotlightDetails = document.getElementById('spotlightDetails');
+        const masterList = document.getElementById('masterList');
         
-        listContainer.innerHTML = '';
+        masterList.innerHTML = '';
 
         if (allTasks.length === 0) {
-            spotlightTitle.innerText = "Clear Skies! ☀️";
-            spotlightMeta.innerText = "Nothing in the inbox.";
+            spotlightTitle.innerText = "Nothing Left! 🎉";
+            spotlightDetails.innerText = "The horizon is clear.";
             return;
         }
 
-        // Spotlight is always the first item
-        const topTask = allTasks[0];
-        spotlightTitle.innerText = topTask.title;
-        spotlightMeta.innerText = `${topTask.duration} mins | Priority: ${topTask.importance}`;
+        // Top Action
+        const top = allTasks[0];
+        spotlightTitle.innerText = top.title;
+        spotlightDetails.innerText = `Due: ${top.due_date} | Importance: ${top.importance} | Time: ${top.duration}m`;
 
-        // Render the rest
-        allTasks.forEach((task, index) => {
-            const item = document.createElement('div');
-            item.className = 'task-item';
-            item.innerHTML = `
-                <input type="checkbox" onclick="completeTask('${task.id}')">
-                <div style="flex:1">
-                    <div style="font-weight:600; font-size:0.9rem">${task.title}</div>
-                    <div class="task-meta">${task.duration}m <span class="tag">Next Action</span></div>
+        // List
+        allTasks.forEach(t => {
+            const row = document.createElement('div');
+            row.className = `task-row ${t.importance >= 8 ? 'high-priority' : ''}`;
+            row.innerHTML = `
+                <div class="task-info">
+                    <span class="task-title">${t.title}</span>
+                    <div class="task-meta">
+                        <span class="badge">Importance: ${t.importance}</span>
+                        <span class="badge">${t.duration}m</span>
+                        <span>📅 ${t.due_date}</span>
+                    </div>
                 </div>
+                <input type="checkbox" style="transform: scale(1.5)" onclick="completeTask('${t.id}')">
             `;
-            listContainer.appendChild(item);
+            masterList.appendChild(row);
         });
     }
 </script>
-
 </body>
 </html>
