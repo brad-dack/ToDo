@@ -3,143 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Life GTD | Next Action Engine</title>
+    <title>Life GTD | Precise Action Engine</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <style>
-        :root {
-            --bg: #f3f4f6;
-            --card: #ffffff;
-            --primary: #1e293b;
-            --accent: #3b82f6;
-            --danger: #ef4444;
-            --text: #334155;
-        }
-
-        body {
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            margin: 0;
-            display: flex;
-            justify-content: center;
-        }
-
+        :root { --bg: #f3f4f6; --card: #ffffff; --primary: #1e293b; --accent: #3b82f6; --danger: #ef4444; --text: #334155; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 700px; padding: 40px 20px; }
-
-        /* THE SPOTLIGHT */
+        
         #spotlight {
             background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-            color: white;
-            padding: 40px;
-            border-radius: 20px;
-            margin-bottom: 30px;
-            text-align: center;
+            color: white; padding: 40px; border-radius: 20px; margin-bottom: 30px; text-align: center;
             box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
         }
-
-        .spotlight-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 2px; opacity: 0.7; }
         .spotlight-task { font-size: 1.8rem; font-weight: 700; margin: 15px 0; display: block; }
         
-        /* CARDS */
-        .card {
-            background: var(--card);
-            padding: 25px;
-            border-radius: 15px;
-            border: 1px solid #e2e8f0;
-            margin-bottom: 25px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-        }
-
+        .card { background: var(--card); padding: 25px; border-radius: 15px; border: 1px solid #e2e8f0; margin-bottom: 25px; }
         .grid-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-        input, select, button {
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #cbd5e1;
-            font-size: 14px;
-        }
-
-        button {
-            background: var(--accent);
-            color: white;
-            font-weight: 600;
-            border: none;
-            cursor: pointer;
-        }
-
+        
+        input, select, button { padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 14px; box-sizing: border-box; }
+        button { background: var(--accent); color: white; font-weight: 600; border: none; cursor: pointer; }
         button.done-btn { background: #10b981; margin-top: 10px; padding: 10px 30px; }
         button.finish-btn { background: #64748b; margin-top: 10px; }
 
-        /* TASK LISTING */
         .task-row {
-            display: flex;
-            align-items: center;
-            padding: 15px;
-            background: white;
-            border-radius: 12px;
-            margin-bottom: 10px;
-            border-left: 5px solid #cbd5e1;
+            display: flex; align-items: center; padding: 15px; background: white; border-radius: 12px;
+            margin-bottom: 10px; border-left: 5px solid #cbd5e1;
         }
-
         .task-row.high-priority { border-left-color: var(--danger); }
         .task-info { flex: 1; }
-        .task-title { font-weight: 600; display: block; }
         .task-meta { font-size: 0.75rem; color: #64748b; margin-top: 4px; }
-        
-        .badge {
-            font-size: 0.7rem;
-            padding: 2px 6px;
-            border-radius: 4px;
-            background: #f1f5f9;
-            margin-right: 5px;
-        }
-
+        .badge { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: #f1f5f9; margin-right: 5px; }
         .hidden { display: none; }
-        h2 { font-size: 1rem; color: #64748b; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
-        
-        .step-counter { color: var(--accent); font-weight: bold; margin-bottom: 10px; display: block; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div id="spotlight">
-        <span class="spotlight-label">Current Next Action</span>
-        <span id="spotlightTitle" class="spotlight-task">Scanning...</span>
+        <span style="opacity: 0.7; font-size: 0.8rem; text-transform: uppercase;">Next Action</span>
+        <span id="spotlightTitle" class="spotlight-task">Loading...</span>
         <div id="spotlightDetails" style="font-size: 0.9rem; opacity: 0.8;"></div>
-        <button class="done-btn" onclick="completeSpotlight()">Done - Move to Next</button>
+        <button class="done-btn" onclick="completeSpotlight()">Complete & Move On</button>
     </div>
 
     <div class="card" id="inputPanel">
-        <h2>Capture New Project or Task</h2>
-        <input id="title" placeholder="What's on your mind?" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
+        <h2 style="font-size: 1rem; margin-bottom:15px;">Capture New Task/Project</h2>
+        <input id="title" placeholder="What needs to happen?" style="width:100%; margin-bottom:10px;">
         <div class="grid-inputs">
             <input type="date" id="dueDate">
             <select id="importance">
                 <option value="1">Low (1)</option>
                 <option value="5" selected>Med (5)</option>
-                <option value="10">Critical (10)</option>
+                <option value="10">High (10)</option>
             </select>
             <select id="duration">
-                <option value="5">Short (5m)</option>
-                <option value="15">Medium (15m)</option>
-                <option value="30">Long / Project (30m+)</option>
+                <option value="15">Small Task</option>
+                <option value="45">Big Project (Breakdown)</option>
             </select>
         </div>
-        <button onclick="handleAdd()" style="width:100%;">Process Entry</button>
+        <button onclick="handleAdd()" style="width:100%;">Add to System</button>
     </div>
 
     <div class="card hidden" id="breakdownPanel" style="border: 2px solid var(--accent);">
-        <h2 id="breakdownHeader" style="color:var(--accent)">Breaking Down Project</h2>
-        <span class="step-counter" id="stepCounter">Step #1</span>
-        <p id="breakdownInstructions" style="font-size:0.85rem; margin-bottom:15px;">What is the <strong>very next physical action</strong> required to move this forward?</p>
+        <h2 id="breakdownHeader" style="color:var(--accent); font-size: 1rem;">Breaking Down</h2>
+        <p style="font-size:0.85rem;">Assign a specific date and time for this step:</p>
         
-        <input id="subtaskTitle" placeholder="e.g., 'Draft email to Sarah'" style="width:100%; margin-bottom:10px; box-sizing:border-box;">
+        <input id="subtaskTitle" placeholder="Next physical step..." style="width:100%; margin-bottom:10px;">
+        <div class="grid-inputs">
+            <input type="date" id="subtaskDate">
+            <input type="number" id="subtaskMinutes" placeholder="Mins" value="15">
+            <select id="subtaskImp">
+                <option value="1">Low</option>
+                <option value="5" selected>Med</option>
+                <option value="10">High</option>
+            </select>
+        </div>
         
-        <button onclick="addSubtask()" style="width:100%;">Add Step & Identify Next</button>
-        <button class="finish-btn" onclick="finishBreakdown()" style="width:100%;">I've broken it down enough</button>
+        <button onclick="addSubtask()" style="width:100%;">Add Step & Create Another</button>
+        <button class="finish-btn" onclick="finishBreakdown()" style="width:100%;">Finish Project Setup</button>
     </div>
 
-    <h2>Action Inventory</h2>
+    <h2 style="font-size: 0.9rem; color: #64748b; text-transform: uppercase;">Your Action List</h2>
     <div id="masterList"></div>
 </div>
 
@@ -151,23 +95,20 @@
 
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
     let allTasks = [];
-    
-    // State for breakdown mode
     let projectContext = null;
-    let stepCount = 1;
 
     window.onload = refresh;
 
     async function refresh() {
-        const { data } = await client.from('subtasks').select('*').eq('completed', false);
-        allTasks = data || [];
+        // Fetching with explicit column naming to avoid 400 errors
+        const { data, error } = await client.from('subtasks').select('*').eq('completed', false);
+        if (error) console.error("Refresh Error:", error);
         
-        // GTD Sort: Importance (High to Low), then Due Date
+        allTasks = data || [];
         allTasks.sort((a, b) => {
             if (b.importance !== a.importance) return b.importance - a.importance;
             return new Date(a.due_date) - new Date(b.due_date);
         });
-
         render();
     }
 
@@ -177,47 +118,37 @@
         const duration = parseInt(document.getElementById('duration').value);
         const dueDate = document.getElementById('dueDate').value;
 
-        if (!title || !dueDate) return alert("Title and Date are required!");
+        if (!title || !dueDate) return alert("Fill in title and date.");
 
         if (duration >= 30) {
-            // Enter Breakdown Mode
             projectContext = { title, importance, dueDate };
-            stepCount = 1;
-            
             document.getElementById('inputPanel').classList.add('hidden');
             document.getElementById('breakdownPanel').classList.remove('hidden');
-            document.getElementById('breakdownHeader').innerText = `Breaking Down: ${title}`;
-            updateStepCounter();
+            document.getElementById('breakdownHeader').innerText = `Breakdown: ${title}`;
+            document.getElementById('subtaskDate').value = dueDate; // Default to project date
         } else {
             saveToDb(title, importance, duration, dueDate);
         }
     }
 
-    function updateStepCounter() {
-        document.getElementById('stepCounter').innerText = `Physical Action #${stepCount}`;
-        document.getElementById('subtaskTitle').value = '';
-        document.getElementById('subtaskTitle').focus();
-    }
-
     async function addSubtask() {
         const subTitle = document.getElementById('subtaskTitle').value;
-        if (!subTitle) return alert("What is the physical action?");
+        const subDate = document.getElementById('subtaskDate').value;
+        const subMins = parseInt(document.getElementById('subtaskMinutes').value);
+        const subImp = parseInt(document.getElementById('subtaskImp').value);
 
-        // We save each subtask with a slightly declining importance 
-        // to ensure the FIRST step entered stays at the top of the spotlight
-        const adjustedImportance = Math.max(1, projectContext.importance - (stepCount * 0.1));
+        if (!subTitle || !subDate) return alert("Step title and date required.");
 
         await client.from('subtasks').insert([{
             title: subTitle,
-            importance: adjustedImportance,
-            duration: 10,
-            due_date: projectContext.dueDate,
+            importance: subImp,
+            duration: subMins,
+            due_date: subDate,
             completed: false
         }]);
 
-        stepCount++;
-        updateStepCounter();
-        refresh(); // Refresh list in background
+        document.getElementById('subtaskTitle').value = '';
+        refresh();
     }
 
     function finishBreakdown() {
@@ -229,9 +160,10 @@
     }
 
     async function saveToDb(title, importance, duration, dueDate) {
-        await client.from('subtasks').insert([{
+        const { error } = await client.from('subtasks').insert([{
             title, importance, duration, due_date: dueDate, completed: false
         }]);
+        if (error) alert("Database Error: " + error.message);
         document.getElementById('title').value = '';
         refresh();
     }
@@ -246,21 +178,18 @@
     }
 
     function render() {
-        const spotlightTitle = document.getElementById('spotlightTitle');
-        const spotlightDetails = document.getElementById('spotlightDetails');
         const masterList = document.getElementById('masterList');
-        
         masterList.innerHTML = '';
 
         if (allTasks.length === 0) {
-            spotlightTitle.innerText = "Inbox Zero! ☕";
-            spotlightDetails.innerText = "Everything is processed.";
+            document.getElementById('spotlightTitle').innerText = "Clear Skies!";
+            document.getElementById('spotlightDetails').innerText = "All tasks completed.";
             return;
         }
 
         const top = allTasks[0];
-        spotlightTitle.innerText = top.title;
-        spotlightDetails.innerText = `Priority: ${top.importance} | Due: ${top.due_date}`;
+        document.getElementById('spotlightTitle').innerText = top.title;
+        document.getElementById('spotlightDetails').innerText = `Due: ${top.due_date} | Time: ${top.duration}m`;
 
         allTasks.forEach(t => {
             const row = document.createElement('div');
@@ -269,7 +198,7 @@
                 <div class="task-info">
                     <span class="task-title">${t.title}</span>
                     <div class="task-meta">
-                        <span class="badge">Imp: ${Math.round(t.importance)}</span>
+                        <span class="badge">Imp: ${t.importance}</span>
                         <span class="badge">${t.duration}m</span>
                         <span>📅 ${t.due_date}</span>
                     </div>
