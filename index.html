@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ActionStream | Pro GTD</title>
+    <title>ActionStream | Optimized GTD</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
@@ -12,7 +12,6 @@
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 12px; }
         .container { max-width: 500px; margin: auto; padding-bottom: 80px; }
 
-        /* SPOTLIGHT */
         #spotlight { 
             background: var(--primary); color: white; padding: 30px 15px; border-radius: 24px; 
             margin-bottom: 25px; text-align: center; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.2);
@@ -25,14 +24,13 @@
         input, select, button { padding: 14px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; width: 100%; margin-bottom: 12px; outline: none; }
         button { background: var(--accent); color: white; font-weight: 700; border: none; cursor: pointer; }
         
+        /* Narrow Importance Box */
+        .narrow-select { width: 50% !important; margin-left: auto; margin-right: 0; display: block; }
+        
         .planning-mode { border: 2px solid var(--accent); background: #f0f7ff; }
         .row { display: flex; gap: 10px; }
         .row > div { flex: 1; }
         .field-label { font-size: 0.75rem; font-weight: 600; color: #475569; margin-bottom: 4px; display: block; }
-
-        .staged-item { display: flex; align-items: center; padding: 14px; background: white; border: 1px solid #bfdbfe; border-radius: 12px; margin-bottom: 8px; }
-        .recur-pill { background: #dcfce7; color: #166534; font-size: 0.65rem; padding: 3px 8px; border-radius: 6px; font-weight: 800; margin-left: 8px; text-transform: uppercase; }
-        .recur-link { font-size: 0.85rem; color: var(--accent); cursor: pointer; text-decoration: underline; background: none; border: none; width: auto; margin-bottom: 12px; display: inline-block; }
 
         .inventory-item { display: flex; align-items: center; padding: 16px; background: white; border-radius: 16px; margin-bottom: 10px; border: 1px solid #e2e8f0; }
         .imp-num { font-weight: 900; color: var(--accent); font-size: 1.2rem; min-width: 35px; }
@@ -42,7 +40,6 @@
         .btn-undo { background: #fee2e2; color: #ef4444; width: auto; padding: 6px 10px; font-size: 0.7rem; margin: 0; }
         
         .hidden { display: none; }
-        .error-msg { color: var(--error); font-size: 0.8rem; font-weight: 700; margin-bottom: 12px; text-align: center; display: none; padding: 12px; background: #fee2e2; border-radius: 10px; }
     </style>
 </head>
 <body>
@@ -50,7 +47,7 @@
 <div class="container">
     <div id="spotlight">
         <span class="section-title" style="color: rgba(255,255,255,0.6); margin-top:0;">Top Priority</span>
-        <div id="spotlightTitle" class="spotlight-task">...</div>
+        <div id="spotlightTitle" class="spotlight-task">Loading...</div>
         <div id="spotlightDetails" style="font-size: 0.85rem; opacity: 0.85; margin-bottom: 20px;"></div>
         <button id="spotlightBtn" style="background: white; color: var(--primary); border-radius: 14px; max-width: 240px; margin: auto;">Complete Action</button>
     </div>
@@ -60,7 +57,10 @@
         <input id="mainGoal" placeholder="Project Name">
         <div class="row">
             <div><label class="field-label">Goal Deadline</label><input type="date" id="goalDate"></div>
-            <div><label class="field-label">Importance</label><select id="mainImp"></select></div>
+            <div>
+                <label class="field-label" style="text-align: right;">Importance</label>
+                <select id="mainImp" class="narrow-select"></select>
+            </div>
         </div>
         <button onclick="lockGoal()">Start Breakdown</button>
     </div>
@@ -73,29 +73,23 @@
                 <div style="flex:1; text-align: right; font-weight: 900; color: var(--accent); font-size: 1.4rem;" id="displayImp"></div>
             </div>
         </div>
-
         <input id="stageTitle" placeholder="Action Title">
         <div class="row">
             <div><label class="field-label">Action Date</label><input type="date" id="stageDate"></div>
             <div><label class="field-label">Mins</label><input type="number" id="stageMins" placeholder="Max 15"></div>
         </div>
-        
-        <button class="recur-link" onclick="toggleRecur()">+ Set Recurrence</button>
-        <div id="recurContainer" class="hidden"><select id="stageRecur"><option value="none">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="fortnightly">Fortnightly</option><option value="monthly">Monthly</option></select></div>
-
-        <div id="valError" class="error-msg"></div>
+        <button class="recur-link" style="font-size: 0.8rem; color: var(--accent); cursor: pointer; text-decoration: underline; background: none; border: none; margin-bottom: 10px;" onclick="toggleRecur()">+ Set Recurrence</button>
+        <div id="recurContainer" class="hidden"><select id="stageRecur"><option value="none">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
         <button id="addOrUpdateBtn" onclick="addToStaging()" style="background: var(--success);">Add Action</button>
-
         <div id="stagedList" style="margin: 20px 0;"></div>
         <div class="row">
-            <button onclick="finalisePlanning()" style="flex: 2;">Commit Changes</button>
+            <button onclick="finalisePlanning()" style="flex: 2;">Commit Strategy</button>
             <button onclick="cancelPlanning()" style="background: #ef4444; flex: 1;">Cancel</button>
         </div>
     </div>
 
     <span class="section-title">Active Inventory</span>
     <div id="masterInventory"></div>
-
     <span class="section-title">Recently Completed</span>
     <div id="historyList"></div>
 </div>
@@ -103,11 +97,14 @@
 <script>
     const CONFIG = { URL: "https://wuhklqulwhioiynoadtj.supabase.co", KEY: "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx" };
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
-    let masterTasks = [];
-    let historyTasks = [];
-    let stagingTasks = [];
-    let activeGoal = null;
-    let editingId = null;
+    let masterTasks = [], historyTasks = [], stagingTasks = [], activeGoal = null, editingId = null;
+
+    // Format Date helper
+    const formatDate = (dateStr) => {
+        if (!dateStr) return "";
+        const [y, m, d] = dateStr.split("-");
+        return `${d}/${m}/${y.slice(-2)}`;
+    };
 
     window.onload = () => {
         const sel = document.getElementById('mainImp');
@@ -137,7 +134,7 @@
         const goal = document.getElementById('mainGoal').value;
         const date = document.getElementById('goalDate').value;
         const imp = document.getElementById('mainImp').value;
-        if (!goal || !date) return alert("Missing details.");
+        if (!goal || !date) return alert("Details missing.");
         activeGoal = { goal, date, imp };
         document.getElementById('displayGoal').innerText = goal;
         document.getElementById('displayImp').innerText = imp;
@@ -152,63 +149,66 @@
         const date = document.getElementById('stageDate').value;
         const mins = parseInt(document.getElementById('stageMins').value);
         const recur = document.getElementById('stageRecur').value;
-        if (!title || !mins || !date || mins > 15) return showError("Check duration (max 15) and fields.");
-        
+        if (!title || !mins || !date || mins > 15) return alert("Error: 15min limit.");
         stagingTasks.push({ title, date, mins, recur });
         document.getElementById('stageTitle').value = '';
         renderStaging();
-    }
-
-    async function editTask(t) {
-        // Clear existing staging
-        stagingTasks = [];
-        editingId = t.id;
-        activeGoal = { goal: t.title.split(': ')[0], date: t.due_date, imp: t.importance };
-        
-        document.getElementById('displayGoal').innerText = activeGoal.goal;
-        document.getElementById('displayImp').innerText = t.importance;
-        document.getElementById('stageTitle').value = t.title.split(': ')[1] || t.title;
-        document.getElementById('stageDate').value = t.due_date;
-        document.getElementById('stageMins').value = t.duration;
-        document.getElementById('stageRecur').value = t.recurrence || 'none';
-        
-        document.getElementById('goalCapture').classList.add('hidden');
-        document.getElementById('planningArea').classList.remove('hidden');
-        document.getElementById('addOrUpdateBtn').innerText = "Update Existing Action";
-        document.getElementById('addOrUpdateBtn').onclick = async () => {
-            const updated = {
-                title: `${activeGoal.goal}: ${document.getElementById('stageTitle').value}`,
-                due_date: document.getElementById('stageDate').value,
-                duration: parseInt(document.getElementById('stageMins').value),
-                importance: parseInt(activeGoal.imp),
-                recurrence: document.getElementById('stageRecur').value
-            };
-            await client.from('subtasks').update(updated).eq('id', editingId);
-            cancelPlanning();
-            refresh();
-        };
-    }
-
-    function renderStaging() {
-        const list = document.getElementById('stagedList');
-        list.innerHTML = stagingTasks.map((t, i) => `<div class="staged-item" data-idx="${i}"><div style="flex:1;"><b>${t.title}</b><br><small>${t.date} • ${t.mins}m</small></div></div>`).join('');
     }
 
     async function finalisePlanning() {
         if (stagingTasks.length === 0) return cancelPlanning();
         const toInsert = stagingTasks.map((t, i) => ({ title: `${activeGoal.goal}: ${t.title}`, importance: activeGoal.imp, duration: t.mins, due_date: t.date, recurrence: t.recur, importance_ranking: i }));
         await client.from('subtasks').insert(toInsert);
+        
+        // CLEAR STAGE 1 & 2
+        document.getElementById('mainGoal').value = '';
+        document.getElementById('goalDate').value = '';
+        document.getElementById('mainImp').selectedIndex = 0;
+        
         cancelPlanning();
         refresh();
     }
 
-    async function completeTask(task) {
-        if (task.recurrence && task.recurrence !== 'none') {
-            const next = new Date(task.due_date);
-            if (task.recurrence === 'daily') next.setDate(next.getDate() + 1);
-            else if (task.recurrence === 'weekly') next.setDate(next.getDate() + 7);
-            await client.from('subtasks').insert([{ ...task, id: undefined, due_date: next.toISOString().split('T')[0], completed: false }]);
+    async function editTask(t) {
+        stagingTasks = []; editingId = t.id;
+        activeGoal = { goal: t.title.split(': ')[0], date: t.due_date, imp: t.importance };
+        document.getElementById('displayGoal').innerText = activeGoal.goal;
+        document.getElementById('displayImp').innerText = t.importance;
+        document.getElementById('stageTitle').value = t.title.split(': ')[1] || t.title;
+        document.getElementById('stageDate').value = t.due_date;
+        document.getElementById('stageMins').value = t.duration;
+        document.getElementById('goalCapture').classList.add('hidden');
+        document.getElementById('planningArea').classList.remove('hidden');
+        document.getElementById('addOrUpdateBtn').onclick = async () => {
+            const updated = { title: `${activeGoal.goal}: ${document.getElementById('stageTitle').value}`, due_date: document.getElementById('stageDate').value, duration: parseInt(document.getElementById('stageMins').value), importance: parseInt(activeGoal.imp) };
+            await client.from('subtasks').update(updated).eq('id', editingId);
+            cancelPlanning(); refresh();
+        };
+    }
+
+    function renderMaster() {
+        const inv = document.getElementById('masterInventory'); inv.innerHTML = '';
+        if (masterTasks.length === 0) {
+            document.getElementById('spotlightTitle').innerText = "All Clear! 🚀";
+            document.getElementById('spotlightDetails').innerText = "Inventory empty.";
+            document.getElementById('spotlightBtn').style.display = 'none';
+        } else {
+            const t = masterTasks[0];
+            document.getElementById('spotlightTitle').innerText = t.title;
+            document.getElementById('spotlightDetails').innerText = `${t.duration}m | Due: ${formatDate(t.due_date)}`;
+            document.getElementById('spotlightBtn').style.display = 'block';
+            document.getElementById('spotlightBtn').onclick = () => completeTask(t);
         }
+        masterTasks.forEach(t => {
+            const d = document.createElement('div'); d.className = 'inventory-item';
+            d.innerHTML = `<div class="imp-num">${t.importance}</div><div style="flex:1"><b>${t.title}</b><br><small>${formatDate(t.due_date)} • ${t.duration}m</small></div>
+            <button class="btn-edit" onclick='editTask(${JSON.stringify(t)})'>Edit</button>
+            <input type="checkbox" class="checkbox" style="margin-left:10px;" onclick='completeTask(${JSON.stringify(t)})'>`;
+            inv.appendChild(d);
+        });
+    }
+
+    async function completeTask(task) {
         await client.from('subtasks').update({ completed: true }).eq('id', task.id);
         refresh();
     }
@@ -220,45 +220,15 @@
 
     function cancelPlanning() {
         stagingTasks = []; activeGoal = null; editingId = null;
-        document.getElementById('addOrUpdateBtn').innerText = "Add Action";
-        document.getElementById('addOrUpdateBtn').onclick = addToStaging;
         document.getElementById('planningArea').classList.add('hidden');
         document.getElementById('goalCapture').classList.remove('hidden');
+        document.getElementById('addOrUpdateBtn').onclick = addToStaging;
     }
 
-    function showError(m) { const e = document.getElementById('valError'); e.innerText = m; e.style.display = 'block'; setTimeout(() => e.style.display='none', 3000); }
-
-    function renderMaster() {
-    const inv = document.getElementById('masterInventory'); 
-    inv.innerHTML = '';
-    const spotlightTitle = document.getElementById('spotlightTitle');
-    const spotlightDetails = document.getElementById('spotlightDetails');
-    const spotlightBtn = document.getElementById('spotlightBtn');
-
-    // FIX: Clear Spotlight if no tasks remain
-    if (masterTasks.length === 0) {
-        spotlightTitle.innerText = "All Actions Done! 🚀";
-        spotlightDetails.innerText = "Inventory is clear. Take a break or plan a new goal.";
-        spotlightBtn.style.display = 'none';
-        return; // Exit early
+    function renderStaging() {
+        const list = document.getElementById('stagedList');
+        list.innerHTML = stagingTasks.map((t, i) => `<div class="staged-item" data-idx="${i}"><div style="flex:1;"><b>${t.title}</b><br><small>${formatDate(t.date)} • ${t.mins}m</small></div></div>`).join('');
     }
-
-    // Otherwise, populate Spotlight with the top priority
-    const t = masterTasks[0];
-    spotlightTitle.innerText = t.title;
-    spotlightDetails.innerText = `${t.duration}m | Due: ${t.due_date}`;
-    spotlightBtn.style.display = 'block';
-    spotlightBtn.onclick = () => completeTask(t);
-
-    // Render the rest of the list
-    masterTasks.forEach(t => {
-        const d = document.createElement('div'); d.className = 'inventory-item';
-        d.innerHTML = `<div class="imp-num">${t.importance}</div><div style="flex:1"><b>${t.title}</b><br><small>${t.due_date} • ${t.duration}m</small></div>
-        <button class="btn-edit" onclick='editTask(${JSON.stringify(t)})'>Edit</button>
-        <input type="checkbox" class="checkbox" style="margin-left:10px;" onclick='completeTask(${JSON.stringify(t)})'>`;
-        inv.appendChild(d);
-    });
-}
 
     function renderHistory() {
         const h = document.getElementById('historyList'); h.innerHTML = '';
