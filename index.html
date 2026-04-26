@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ActionStream | Optimized GTD</title>
+    <title>ActionStream | Pro UI</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
@@ -21,25 +21,37 @@
         .card { background: var(--card); padding: 20px; border-radius: 18px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
         .section-title { font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1.2px; margin: 25px 0 15px; display: block; }
         
-        input, select, button { padding: 14px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; width: 100%; margin-bottom: 12px; outline: none; }
-        button { background: var(--accent); color: white; font-weight: 700; border: none; cursor: pointer; }
+        input, select, button { 
+            padding: 14px; border-radius: 12px; border: 1px solid #cbd5e1; 
+            font-size: 16px; width: 100%; margin-bottom: 12px; outline: none;
+            height: 50px; /* Unified height for all input elements */
+        }
+        button { background: var(--accent); color: white; font-weight: 700; border: none; cursor: pointer; height: auto; padding: 16px; }
         
-        /* Narrow Importance Box */
-        .narrow-select { width: 50% !important; margin-left: auto; margin-right: 0; display: block; }
-        
-        .planning-mode { border: 2px solid var(--accent); background: #f0f7ff; }
-        .row { display: flex; gap: 10px; }
+        /* Unified Sizing for Rows */
+        .row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
         .row > div { flex: 1; }
+        .narrow-50 { flex: 0 0 50% !important; } /* Hard 50% width */
+
         .field-label { font-size: 0.75rem; font-weight: 600; color: #475569; margin-bottom: 4px; display: block; }
+
+        /* Staging Area - Restored Separation */
+        .staged-item { 
+            display: flex; align-items: center; padding: 14px; background: white; 
+            border: 1px solid #bfdbfe; border-radius: 12px; margin-bottom: 12px; 
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.05);
+        }
+        .drag-handle { color: #cbd5e1; margin-right: 15px; font-weight: bold; font-size: 1.2rem; cursor: grab; }
 
         .inventory-item { display: flex; align-items: center; padding: 16px; background: white; border-radius: 16px; margin-bottom: 10px; border: 1px solid #e2e8f0; }
         .imp-num { font-weight: 900; color: var(--accent); font-size: 1.2rem; min-width: 35px; }
-        .checkbox { width: 34px; height: 34px; border-radius: 10px; accent-color: var(--accent); }
+        .checkbox { width: 34px; height: 34px; border-radius: 10px; accent-color: var(--accent); cursor: pointer; }
         
-        .btn-edit { background: #f1f5f9; color: #475569; width: auto; padding: 8px 12px; font-size: 0.75rem; margin: 0; }
-        .btn-undo { background: #fee2e2; color: #ef4444; width: auto; padding: 6px 10px; font-size: 0.7rem; margin: 0; }
+        .btn-edit { background: #f1f5f9; color: #475569; width: auto; padding: 8px 12px; font-size: 0.75rem; margin: 0; height: auto; }
+        .btn-undo { background: #fee2e2; color: #ef4444; width: auto; padding: 6px 10px; font-size: 0.7rem; margin: 0; height: auto; }
         
         .hidden { display: none; }
+        .planning-mode { border: 2px solid var(--accent); background: #f0f7ff; }
     </style>
 </head>
 <body>
@@ -57,9 +69,9 @@
         <input id="mainGoal" placeholder="Project Name">
         <div class="row">
             <div><label class="field-label">Goal Deadline</label><input type="date" id="goalDate"></div>
-            <div>
-                <label class="field-label" style="text-align: right;">Importance</label>
-                <select id="mainImp" class="narrow-select"></select>
+            <div class="narrow-50">
+                <label class="field-label">Importance</label>
+                <select id="mainImp"></select>
             </div>
         </div>
         <button onclick="lockGoal()">Start Breakdown</button>
@@ -68,20 +80,33 @@
     <div class="card hidden planning-mode" id="planningArea">
         <div style="border-bottom: 1px solid #bfdbfe; padding-bottom: 12px; margin-bottom: 15px;">
             <h2 id="displayGoal" style="margin:0; font-size: 1.1rem; font-weight: 800;"></h2>
-            <div class="row" style="margin-top: 5px; align-items: center;">
-                <div style="flex:2"><input type="date" id="activeGoalDeadline" style="font-size: 0.8rem; padding: 8px;" onchange="updateGoalDeadline(this.value)"></div>
+            <div class="row" style="margin-top: 5px; align-items: center; margin-bottom: 0;">
+                <div style="flex:2"><input type="date" id="activeGoalDeadline" style="font-size: 0.8rem; height: 40px;" onchange="updateGoalDeadline(this.value)"></div>
                 <div style="flex:1; text-align: right; font-weight: 900; color: var(--accent); font-size: 1.4rem;" id="displayImp"></div>
             </div>
         </div>
-        <input id="stageTitle" placeholder="Action Title">
+
+        <label class="field-label">Action Title</label>
+        <input id="stageTitle" placeholder="Next physical step">
+
         <div class="row">
-            <div><label class="field-label">Action Date</label><input type="date" id="stageDate"></div>
-            <div><label class="field-label">Mins</label><input type="number" id="stageMins" placeholder="Max 15"></div>
+            <div class="narrow-50">
+                <label class="field-label">Mins</label>
+                <input type="number" id="stageMins" placeholder="Max 15">
+            </div>
+            <div>
+                <label class="field-label">Action Date</label>
+                <input type="date" id="stageDate">
+            </div>
         </div>
-        <button class="recur-link" style="font-size: 0.8rem; color: var(--accent); cursor: pointer; text-decoration: underline; background: none; border: none; margin-bottom: 10px;" onclick="toggleRecur()">+ Set Recurrence</button>
+        
+        <button class="recur-link" style="font-size: 0.8rem; color: var(--accent); cursor: pointer; text-decoration: underline; background: none; border: none; margin-bottom: 15px; width: auto; padding: 0; height: auto;" onclick="toggleRecur()">+ Set Recurrence</button>
         <div id="recurContainer" class="hidden"><select id="stageRecur"><option value="none">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
-        <button id="addOrUpdateBtn" onclick="addToStaging()" style="background: var(--success);">Add Action</button>
-        <div id="stagedList" style="margin: 20px 0;"></div>
+        
+        <button id="addOrUpdateBtn" onclick="addToStaging()" style="background: var(--success); width: 100%;">Add to Sequence</button>
+        
+        <div id="stagedList" style="margin: 25px 0;"></div>
+        
         <div class="row">
             <button onclick="finalisePlanning()" style="flex: 2;">Commit Strategy</button>
             <button onclick="cancelPlanning()" style="background: #ef4444; flex: 1;">Cancel</button>
@@ -99,7 +124,6 @@
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
     let masterTasks = [], historyTasks = [], stagingTasks = [], activeGoal = null, editingId = null;
 
-    // Format Date helper
     const formatDate = (dateStr) => {
         if (!dateStr) return "";
         const [y, m, d] = dateStr.split("-");
@@ -109,7 +133,7 @@
     window.onload = () => {
         const sel = document.getElementById('mainImp');
         for(let i=1; i<=10; i++) sel.options[sel.options.length] = new Option(i, i);
-        Sortable.create(document.getElementById('stagedList'), { animation: 150, onEnd: () => {
+        Sortable.create(document.getElementById('stagedList'), { animation: 150, handle: '.drag-handle', onEnd: () => {
             const items = Array.from(document.querySelectorAll('.staged-item'));
             stagingTasks = items.map(el => stagingTasks[parseInt(el.dataset.idx)]);
             renderStaging();
@@ -159,12 +183,9 @@
         if (stagingTasks.length === 0) return cancelPlanning();
         const toInsert = stagingTasks.map((t, i) => ({ title: `${activeGoal.goal}: ${t.title}`, importance: activeGoal.imp, duration: t.mins, due_date: t.date, recurrence: t.recur, importance_ranking: i }));
         await client.from('subtasks').insert(toInsert);
-        
-        // CLEAR STAGE 1 & 2
         document.getElementById('mainGoal').value = '';
         document.getElementById('goalDate').value = '';
         document.getElementById('mainImp').selectedIndex = 0;
-        
         cancelPlanning();
         refresh();
     }
@@ -227,7 +248,14 @@
 
     function renderStaging() {
         const list = document.getElementById('stagedList');
-        list.innerHTML = stagingTasks.map((t, i) => `<div class="staged-item" data-idx="${i}"><div style="flex:1;"><b>${t.title}</b><br><small>${formatDate(t.date)} • ${t.mins}m</small></div></div>`).join('');
+        list.innerHTML = stagingTasks.map((t, i) => `
+            <div class="staged-item" data-idx="${i}">
+                <div class="drag-handle">⋮⋮</div>
+                <div style="flex:1;">
+                    <b>${t.title}</b><br>
+                    <small>${formatDate(t.date)} • ${t.mins}m</small>
+                </div>
+            </div>`).join('');
     }
 
     function renderHistory() {
