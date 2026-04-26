@@ -20,15 +20,14 @@
         .day-cap { flex: 1; text-align: center; }
         .cap-dot { height: 4px; width: 100%; border-radius: 2px; margin-top: 6px; }
         
-        /* Priority Cards */
         .priority-deck { display: flex; flex-direction: column; gap: 12px; }
         .prio-card { background: rgba(255,255,255,0.05); padding: 16px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between; }
         .prio-info { flex: 1; overflow: hidden; margin-right: 12px; }
         .prio-title { font-weight: 700; font-size: 0.95rem; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .prio-meta { font-size: 0.75rem; opacity: 0.6; }
 
-        /* Generic UI */
-        .card { background: var(--card); padding: 20px; border-radius: 24px; border: 1px solid var(--border); margin-bottom: 20px; }
+        /* UI Elements */
+        .card { background: var(--card); padding: 20px; border-radius: 24px; border: 1px solid var(--border); margin-bottom: 20px; position: relative; }
         .section-title { font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1.5px; margin: 25px 0 12px; display: block; }
         input, select { width: 100%; height: 50px; padding: 0 16px; border-radius: 14px; border: 1px solid #cbd5e1; font-size: 16px; margin-bottom: 12px; outline: none; background: white; }
         .submit-btn { background: var(--accent); color: white; width: 100%; height: 54px; border-radius: 16px; font-weight: 700; font-size: 1rem; border: none; cursor: pointer; }
@@ -43,11 +42,10 @@
         .btn-edit { background: none; border: none; color: #64748b; cursor: pointer; padding: 8px; font-size: 1.2rem; }
         .btn-bulk { background: rgba(255,255,255,0.15); color: white; border: none; font-size: 0.65rem; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-weight: 700; }
 
-        /* Settings Overlay */
+        /* Overlays */
+        .recur-link { font-size: 0.65rem; color: var(--accent); text-decoration: none; font-weight: 700; cursor: pointer; position: absolute; right: 20px; top: 25px; }
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15,23,42,0.9); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .settings-card { background: white; width: 100%; max-width: 400px; border-radius: 24px; padding: 24px; max-height: 90vh; overflow-y: auto; }
-        .grid-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        .grid-settings label { font-size: 0.6rem; font-weight: 800; color: #64748b; text-transform: uppercase; display: block; margin-bottom: 4px; }
         .hidden { display: none; }
     </style>
 </head>
@@ -68,13 +66,28 @@
     </div>
 
     <div class="card" id="goalCapture">
+        <a class="recur-link" onclick="toggleRecurrence()">⚡ Reoccurring: <span id="recurLabel">None</span></a>
         <span class="section-title">New Project Goal</span>
         <input id="mainGoal" placeholder="Project Name">
         <div style="display:flex; gap:12px; align-items: flex-end;">
             <div><label style="font-size:0.7rem; color:#64748b;">Deadline</label><input type="date" id="goalDate"></div>
-            <div style="flex:0 0 40%;"><label style="font-size:0.7rem; color:#64748b;">Imp (1-10)</label><select id="mainImp"></select></div>
+            <div style="flex:0 0 40%;"><label style="font-size:0.7rem; color:#64748b;">Importance</label><select id="mainImp"></select></div>
         </div>
-        <button class="submit-btn" onclick="lockGoal()">Breakdown Actions</button>
+        
+        <div id="recurrencePicker" class="hidden" style="margin-top:10px; padding:15px; background:#f1f5f9; border-radius:12px;">
+            <label style="font-size:0.7rem; font-weight:800;">Repeat Every:</label>
+            <select id="recurRule" onchange="document.getElementById('recurLabel').innerText = this.value || 'None'">
+                <option value="">None</option>
+                <option value="Daily">Daily</option>
+                <option value="Weekly">Weekly</option>
+                <option value="Fortnightly">Fortnightly</option>
+                <option value="Monthly">Monthly</option>
+                <option value="Quarterly">Quarterly</option>
+                <option value="Bi-annually">Bi-annually</option>
+                <option value="Annually">Annually</option>
+            </select>
+        </div>
+        <button class="submit-btn" style="margin-top:10px;" onclick="lockGoal()">Breakdown Actions</button>
     </div>
 
     <div class="card hidden" id="planningArea" style="border: 2px solid var(--accent); background: #f0f7ff;">
@@ -84,7 +97,7 @@
             <div style="flex:0 0 35%;"><label style="font-size:0.7rem;">Mins (15 max)</label><input type="number" id="stageMins" max="15" value="15"></div>
             <div><label style="font-size:0.7rem;">Action Date</label><input type="date" id="stageDate"></div>
         </div>
-        <button id="addStagingBtn" onclick="addToStaging()" style="background:var(--success); color:white; width:100%; height:48px; border-radius:14px; font-weight:700; margin-bottom:15px; border:none; cursor:pointer;">+ Add to Sequence</button>
+        <button onclick="addToStaging()" style="background:var(--success); color:white; width:100%; height:48px; border-radius:14px; font-weight:700; margin-bottom:15px; border:none; cursor:pointer;">+ Add to Sequence</button>
         <div id="stagedList" style="margin-bottom:20px; border-top:1px solid #dbeafe; padding-top:15px;"></div>
         <div style="display:flex; gap:12px;">
             <button onclick="finalisePlanning()" class="submit-btn" style="flex:2">Commit to List</button>
@@ -94,29 +107,20 @@
 
     <span class="section-title">Active ToDo List</span>
     <div id="masterToDo"></div>
-
     <span class="section-title" style="margin-top:40px;">Recently Completed</span>
     <div id="archivedToDo"></div>
 
     <div id="settingsOverlay" class="overlay hidden">
         <div class="settings-card">
             <span class="section-title">Weekly Capacity (Mins)</span>
-            <div class="grid-settings">
-                <div><label>Mon</label><input type="number" id="set-mon"></div>
-                <div><label>Tue</label><input type="number" id="set-tue"></div>
-                <div><label>Wed</label><input type="number" id="set-wed"></div>
-                <div><label>Thu</label><input type="number" id="set-thu"></div>
-                <div><label>Fri</label><input type="number" id="set-fri"></div>
-                <div><label>Sat</label><input type="number" id="set-sat"></div>
-                <div><label>Sun</label><input type="number" id="set-sun"></div>
-                <div style="grid-column: span 2;">
-                    <label>Timezone</label>
-                    <select id="set-tz">
-                        <option value="Australia/Perth">Perth (AWST)</option>
-                        <option value="Australia/Sydney">Sydney (AEST)</option>
-                        <option value="UTC">UTC</option>
-                    </select>
-                </div>
+            <div id="settingsGrid" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;"></div>
+            <div style="margin-bottom:20px;">
+                <label style="font-size:0.6rem; font-weight:800; color:#64748b; text-transform:uppercase;">Timezone</label>
+                <select id="set-tz">
+                    <option value="Australia/Perth">Perth (AWST)</option>
+                    <option value="Australia/Sydney">Sydney (AEST)</option>
+                    <option value="UTC">UTC</option>
+                </select>
             </div>
             <button class="submit-btn" onclick="saveSettings()">Save Schedule</button>
             <button onclick="toggleSettings()" style="width:100%; background:none; border:none; color:#64748b; margin-top:10px; cursor:pointer;">Cancel</button>
@@ -127,18 +131,15 @@
 <script>
     const CONFIG = { URL: "https://wuhklqulwhioiynoadtj.supabase.co", KEY: "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx" };
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
-    
-    let masterTasks = [], stagingTasks = [], activeGoal = null;
-    let settings = { 
-        mon_limit: 45, tue_limit: 45, wed_limit: 45, thu_limit: 45, 
-        fri_limit: 45, sat_limit: 90, sun_limit: 90, timezone: 'Australia/Perth' 
-    };
+    let masterTasks = [], stagingTasks = [], activeGoal = null, settings = {};
 
     const formatDate = (dStr) => { if(!dStr) return ""; const [y,m,d] = dStr.split("-"); return `${d}/${m}/${y.slice(-2)}`; };
 
     window.onload = async () => {
         const sel = document.getElementById('mainImp');
         for(let i=1; i<=10; i++) sel.options[sel.options.length] = new Option(i, i);
+        const grid = document.getElementById('settingsGrid');
+        ['mon','tue','wed','thu','fri','sat','sun'].forEach(d => grid.innerHTML += `<div><label style="font-size:0.6rem; font-weight:800; color:#64748b; text-transform:uppercase;">${d}</label><input type="number" id="set-${d}"></div>`);
         await loadSettings();
         refresh();
     };
@@ -158,31 +159,93 @@
         renderArchived(completed || []);
     }
 
-    /* --- Settings & UI Logic --- */
-    function toggleSettings() {
-        const overlay = document.getElementById('settingsOverlay');
-        overlay.classList.toggle('hidden');
-        if(!overlay.classList.contains('hidden')) {
-            ['mon','tue','wed','thu','fri','sat','sun'].forEach(d => {
-                document.getElementById(`set-${d}`).value = settings[`${d}_limit`] || 45;
-            });
-            document.getElementById('set-tz').value = settings.timezone || 'Australia/Perth';
-        }
+    /* --- Recurrence & Goal Logic --- */
+    function toggleRecurrence() { document.getElementById('recurrencePicker').classList.toggle('hidden'); }
+
+    function lockGoal() {
+        const goal = document.getElementById('mainGoal').value;
+        const date = document.getElementById('goalDate').value;
+        const recur = document.getElementById('recurRule').value;
+        if(!goal || !date) return alert("Goal Name & Deadline required");
+        activeGoal = { goal, date, imp: document.getElementById('mainImp').value, recur, id: 'proj_' + Date.now() };
+        document.getElementById('displayGoal').innerText = `Project: ${goal} ${recur ? '(Repeat: '+recur+')' : ''}`;
+        document.getElementById('stageDate').value = date;
+        document.getElementById('goalCapture').classList.add('hidden');
+        document.getElementById('planningArea').classList.remove('hidden');
     }
 
-    async function saveSettings() {
-        const newSettings = { id: 'default_user', timezone: document.getElementById('set-tz').value };
-        ['mon','tue','wed','thu','fri','sat','sun'].forEach(d => {
-            newSettings[`${d}_limit`] = parseInt(document.getElementById(`set-${d}`).value);
+    function addToStaging() {
+        const title = document.getElementById('stageTitle').value;
+        const mins = parseInt(document.getElementById('stageMins').value);
+        const date = document.getElementById('stageDate').value;
+        if(mins > 15) return alert("break task down smaller (15min max)");
+        if(date > activeGoal.date) return alert("Date exceeds project deadline");
+        stagingTasks.push({ title, duration: mins, due_date: date });
+        document.getElementById('stageTitle').value = '';
+        renderStaging();
+    }
+
+    function renderStaging() {
+        document.getElementById('stagedList').innerHTML = stagingTasks.map(t => `<div class="staged-item"><b>${t.title}</b> - ${t.duration}m on ${formatDate(t.due_date)}</div>`).join('');
+    }
+
+    async function finalisePlanning() {
+        const toInsert = stagingTasks.map(t => ({ 
+            title: `${activeGoal.goal}: ${t.title}`, 
+            duration: t.duration, due_date: t.due_date, 
+            importance: parseInt(activeGoal.imp), goal_deadline: activeGoal.date,
+            project_id: activeGoal.id, recurrence_rule: activeGoal.recur || null,
+            updated_at: new Date().toISOString() 
+        }));
+        await client.from('subtasks').insert(toInsert);
+        cancelPlanning(); refresh();
+    }
+
+    /* --- Core Actions --- */
+    async function completeTask(id) {
+        const task = masterTasks.find(t => t.id == id);
+        await client.from('subtasks').update({ completed: true, updated_at: new Date().toISOString() }).eq('id', id);
+        if (task.recurrence_rule && task.project_id) {
+            const projectTasks = masterTasks.filter(t => t.project_id === task.project_id && t.id != id);
+            if (projectTasks.length === 0) handleRecurrence(task);
+        }
+        refresh();
+    }
+
+    function handleRecurrence(task) {
+        const offsets = { Daily: 1, Weekly: 7, Fortnightly: 14, Monthly: 30, Quarterly: 90, 'Bi-annually': 182, Annually: 365 };
+        client.from('subtasks').select('*').eq('project_id', task.project_id).then(({data}) => {
+            const newProjId = 'proj_' + Date.now();
+            const newTasks = data.map(t => {
+                let d = new Date(t.due_date); d.setDate(d.getDate() + offsets[task.recurrence_rule]);
+                let g = new Date(t.goal_deadline); g.setDate(g.getDate() + offsets[task.recurrence_rule]);
+                return { ...t, id: undefined, completed: false, project_id: newProjId, due_date: d.toISOString().split('T')[0], goal_deadline: g.toISOString().split('T')[0] };
+            });
+            client.from('subtasks').insert(newTasks).then(refresh);
         });
-        const { error } = await client.from('user_settings').upsert(newSettings);
-        if(!error) { settings = newSettings; toggleSettings(); refresh(); }
+    }
+
+    async function editTask(id) {
+        const t = masterTasks.find(task => task.id == id);
+        const action = prompt("1: Edit Title/Mins\n2: Edit Goal Deadline", "1");
+        if (action === "1") {
+            const newTitle = prompt("Edit Title:", t.title);
+            const newDuration = parseInt(prompt("Edit Duration (15 max):", t.duration));
+            if (newTitle && newDuration <= 15) await client.from('subtasks').update({ title: newTitle, duration: newDuration }).eq('id', id);
+            else if (newDuration > 15) alert("break task down smaller (15min max)");
+        } else if (action === "2") {
+            const newDead = prompt("New Goal Deadline (YYYY-MM-DD):", t.goal_deadline);
+            if (newDead) {
+                const projectName = t.title.split(":")[0];
+                await client.from('subtasks').update({ goal_deadline: newDead }).ilike('title', `${projectName}%`);
+            }
+        }
+        refresh();
     }
 
     async function pushAllToday() {
         const todayStr = new Date().toISOString().split('T')[0];
-        const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomStr = tomorrow.toISOString().split('T')[0];
+        const tomStr = new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0];
         const todayTasks = masterTasks.filter(t => t.due_date === todayStr);
         if (todayTasks.length === 0) return alert("Nothing scheduled for today!");
         if (confirm(`Move ${todayTasks.length} tasks to tomorrow?`)) {
@@ -194,114 +257,46 @@
         }
     }
 
-    async function editTask(id) {
-        const t = masterTasks.find(task => task.id == id);
-        const action = prompt("Type '1' to edit Title/Mins\nType '2' to edit Goal Deadline", "1");
-        if (action === "1") {
-            const newTitle = prompt("Edit Title:", t.title);
-            const newDuration = parseInt(prompt("Edit Duration (15 max):", t.duration));
-            if (newTitle) {
-                if (newDuration > 15) return alert("break task down smaller (15min max)");
-                await client.from('subtasks').update({ title: newTitle, duration: newDuration, updated_at: new Date().toISOString() }).eq('id', id);
-            }
-        } else if (action === "2") {
-            const newDead = prompt("New Goal Deadline (YYYY-MM-DD):", t.goal_deadline);
-            if (newDead) {
-                const projectName = t.title.split(":")[0];
-                await client.from('subtasks').update({ goal_deadline: newDead }).ilike('title', `${projectName}%`);
-            }
-        }
-        refresh();
-    }
-
+    /* --- UI Rendering --- */
     function renderDashboard() {
         const bar = document.getElementById('weekBar'); bar.innerHTML = '';
-        const today = new Date();
-        const dayKeys = ['sun_limit', 'mon_limit', 'tue_limit', 'wed_limit', 'thu_limit', 'fri_limit', 'sat_limit'];
-
+        const keys = ['sun_limit', 'mon_limit', 'tue_limit', 'wed_limit', 'thu_limit', 'fri_limit', 'sat_limit'];
         for(let i=0; i<7; i++) {
-            const d = new Date(today); d.setDate(today.getDate() + i);
-            const dStr = d.toISOString().split('T')[0];
-            const load = masterTasks.filter(t => t.due_date === dStr).reduce((s, t) => s + parseInt(t.duration), 0);
-            const limit = settings[dayKeys[d.getDay()]] || 45;
-            const color = load > limit ? 'var(--error)' : (load > 0 ? 'var(--success)' : 'rgba(255,255,255,0.1)');
+            const d = new Date(); d.setDate(d.getDate() + i);
+            const load = masterTasks.filter(t => t.due_date === d.toISOString().split('T')[0]).reduce((s, t) => s + t.duration, 0);
+            const color = load > (settings[keys[d.getDay()]] || 45) ? 'var(--error)' : (load > 0 ? 'var(--success)' : 'rgba(255,255,255,0.1)');
             bar.innerHTML += `<div class="day-cap"><div style="font-size:0.6rem; opacity:0.6;">${['S','M','T','W','T','F','S'][d.getDay()]}</div><div class="cap-dot" style="background:${color};"></div></div>`;
         }
-
         const deck = document.getElementById('priorityDeck'); deck.innerHTML = '';
         masterTasks.slice(0, 3).forEach(t => {
-            deck.innerHTML += `<div class="prio-card"><div class="prio-info"><span class="prio-title">${t.title}</span><span class="prio-meta">${formatDate(t.due_date)} • ${t.duration}m</span></div><div style="display:flex; gap:6px;"><button class="btn-push" onclick='pushTask("${t.id}", "${t.due_date}", "${t.goal_deadline}")'>+1d</button><button class="btn-done" onclick='completeTask("${t.id}")'>✓</button></div></div>`;
+            deck.innerHTML += `<div class="prio-card"><div class="prio-info"><span class="prio-title">${t.title}</span><span class="prio-meta">${formatDate(t.due_date)} • ${t.duration}m</span></div><button class="btn-done" onclick='completeTask("${t.id}")'>✓</button></div>`;
         });
     }
 
     function renderToDo() {
         const list = document.getElementById('masterToDo'); list.innerHTML = '';
         masterTasks.forEach(t => {
-            list.innerHTML += `<div class="todo-item"><div style="font-weight:900; color:var(--accent); font-size:0.8rem; width:20px;">${t.importance}</div><div style="flex:1; overflow:hidden;"><b>${t.title}</b><br><small style="color:#64748b">${formatDate(t.due_date)} • ${t.duration}m</small></div><button class="btn-edit" onclick='editTask("${t.id}")'>✎</button><button class="btn-done" style="width:34px; height:34px; border-radius:8px; background:#f1f5f9; color:#64748b" onclick='completeTask("${t.id}")'>✓</button></div>`;
+            list.innerHTML += `<div class="todo-item"><div style="font-weight:900; color:var(--accent); font-size:0.8rem; width:20px;">${t.importance}</div><div style="flex:1;"><b>${t.title}</b><br><small>${formatDate(t.due_date)} • ${t.duration}m</small></div><button class="btn-edit" onclick='editTask("${t.id}")'>✎</button><button class="btn-done" style="background:#f1f5f9; color:#64748b" onclick='completeTask("${t.id}")'>✓</button></div>`;
         });
     }
 
     function renderArchived(tasks) {
         const list = document.getElementById('archivedToDo'); list.innerHTML = '';
-        tasks.forEach(t => {
-            list.innerHTML += `<div class="todo-item completed-item"><div style="flex:1;"><strike>${t.title}</strike></div><button class="btn-push" style="color:var(--accent); background:none; font-size:0.7rem;" onclick='undoComplete("${t.id}")'>UNDO</button></div>`;
-        });
+        tasks.forEach(t => list.innerHTML += `<div class="todo-item completed-item"><div style="flex:1;"><strike>${t.title}</strike></div></div>`);
     }
 
-    /* --- Core Actions --- */
-    async function completeTask(id) { await client.from('subtasks').update({ completed: true, updated_at: new Date().toISOString() }).eq('id', id); refresh(); }
-    async function undoComplete(id) { await client.from('subtasks').update({ completed: false }).eq('id', id); refresh(); }
-    async function pushTask(id, cur, dead) {
-        const tom = new Date(cur); tom.setDate(tom.getDate()+1);
-        const tomStr = tom.toISOString().split('T')[0];
-        if(dead && tomStr > dead) return alert("Deadline reached.");
-        await client.from('subtasks').update({ due_date: tomStr }).eq('id', id);
-        refresh();
+    function toggleSettings() { document.getElementById('settingsOverlay').classList.toggle('hidden'); }
+    async function saveSettings() {
+        const n = { id: 'default_user', timezone: document.getElementById('set-tz').value };
+        ['mon','tue','wed','thu','fri','sat','sun'].forEach(d => n[`${d}_limit`] = parseInt(document.getElementById(`set-${d}`).value));
+        await client.from('user_settings').upsert(n); settings = n; toggleSettings(); refresh();
     }
-    
-    function lockGoal() {
-        const goal = document.getElementById('mainGoal').value;
-        const date = document.getElementById('goalDate').value;
-        if(!goal || !date) return alert("Goal Name & Deadline required");
-        activeGoal = { goal, date, imp: document.getElementById('mainImp').value };
-        document.getElementById('displayGoal').innerText = `Project: ${goal} (Ends: ${formatDate(date)})`;
-        document.getElementById('stageDate').value = date;
-        document.getElementById('goalCapture').classList.add('hidden');
-        document.getElementById('planningArea').classList.remove('hidden');
-    }
-
-    function addToStaging() {
-        const title = document.getElementById('stageTitle').value;
-        const mins = parseInt(document.getElementById('stageMins').value);
-        const date = document.getElementById('stageDate').value;
-        if(!title || isNaN(mins) || !date) return alert("Missing info");
-        if(mins > 15) return alert("break task down smaller (15min max)");
-        if(date > activeGoal.date) return alert(`Action date cannot be later than project deadline (${formatDate(activeGoal.date)})`);
-        stagingTasks.push({ title, duration: mins, due_date: date });
-        document.getElementById('stageTitle').value = '';
-        renderStaging();
-    }
-
-    function renderStaging() {
-        document.getElementById('stagedList').innerHTML = stagingTasks.map((t, i) => `<div class="staged-item"><b>${t.title}</b> - ${t.duration}m on ${formatDate(t.due_date)}</div>`).join('');
-    }
-
-    async function finalisePlanning() {
-        const toInsert = stagingTasks.map(t => ({ title: `${activeGoal.goal}: ${t.title}`, duration: parseInt(t.duration), due_date: t.due_date, importance: parseInt(activeGoal.imp), goal_deadline: activeGoal.date, updated_at: new Date().toISOString() }));
-        await client.from('subtasks').insert(toInsert);
-        cancelPlanning(); 
-        refresh();
-    }
-
     function cancelPlanning() {
         document.getElementById('planningArea').classList.add('hidden');
         document.getElementById('goalCapture').classList.remove('hidden');
-        document.getElementById('mainGoal').value = '';
+        document.getElementById('mainGoal').value = ''; 
         document.getElementById('goalDate').value = '';
-        document.getElementById('stageTitle').value = '';
-        document.getElementById('stageMins').value = '15';
-        stagingTasks = [];
-        document.getElementById('stagedList').innerHTML = '';
+        stagingTasks = []; document.getElementById('stagedList').innerHTML = '';
     }
 </script>
 </body>
