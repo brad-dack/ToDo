@@ -3,124 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ActionStream | Capacity Pro</title>
+    <title>ActionStream | Capacity Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
-        :root { --bg: #f8fafc; --card: #ffffff; --primary: #0f172a; --accent: #2563eb; --text: #1e293b; --error: #ef4444; --success: #10b981; --warn: #f59e0b; }
+        :root { --bg: #f1f5f9; --card: #ffffff; --primary: #0f172a; --accent: #2563eb; --text: #1e293b; --error: #ef4444; --success: #10b981; --warn: #f59e0b; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 12px; }
-        .container { max-width: 500px; margin: auto; padding-bottom: 80px; position: relative; }
+        .container { max-width: 500px; margin: auto; padding-bottom: 80px; }
 
-        /* Settings Header */
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .settings-btn { background: none; border: 1px solid #cbd5e1; color: var(--text); padding: 8px 12px; border-radius: 8px; width: auto; height: auto; font-size: 14px; }
+        /* Dashboard & Spotlight */
+        .dashboard { background: var(--primary); color: white; padding: 20px; border-radius: 28px; margin-bottom: 25px; box-shadow: 0 15px 30px -10px rgba(15, 23, 42, 0.3); }
+        .week-bar { display: flex; gap: 4px; margin-bottom: 20px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 14px; }
+        .day-cap { flex: 1; text-align: center; }
+        .cap-dot { height: 4px; width: 100%; border-radius: 2px; margin-top: 4px; }
+        
+        .priority-deck { display: flex; flex-direction: column; gap: 12px; }
+        .prio-card { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between; }
+        .prio-info { flex: 1; }
+        .prio-title { font-weight: 800; font-size: 0.95rem; display: block; margin-bottom: 2px; }
+        .prio-meta { font-size: 0.75rem; opacity: 0.7; }
 
-        #spotlight { 
-            background: var(--primary); color: white; padding: 30px 15px; border-radius: 24px; 
-            margin-bottom: 25px; text-align: center; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.2);
-        }
-        .spotlight-task { font-size: 1.6rem; font-weight: 800; margin: 10px 0; line-height: 1.1; }
-        
-        .card { background: var(--card); padding: 20px; border-radius: 18px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
-        .section-title { font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1.2px; margin: 25px 0 15px; display: block; }
-        
+        /* Controls */
+        .btn-push { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 12px; border-radius: 10px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 8px; }
+        .btn-done { background: var(--success); border: none; color: white; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; font-weight: 900; }
+
+        /* Standard Components */
+        .card { background: var(--card); padding: 20px; border-radius: 20px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+        .section-title { font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1.2px; margin: 25px 0 10px; display: block; }
         input, select, button { padding: 14px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; width: 100%; margin-bottom: 12px; outline: none; height: 50px; }
         button { background: var(--accent); color: white; font-weight: 700; border: none; cursor: pointer; height: auto; padding: 16px; }
+        .row { display: flex; gap: 10px; align-items: flex-end; }
         
-        .row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
-        .row > div { flex: 1; }
-        .narrow-50 { flex: 0 0 50% !important; }
-
-        .field-label { font-size: 0.75rem; font-weight: 600; color: #475569; margin-bottom: 4px; display: block; }
-
-        /* Capacity Indicators */
-        .capacity-pill { font-size: 0.65rem; padding: 4px 8px; border-radius: 6px; font-weight: 800; display: inline-block; margin-top: 5px; }
-        .cap-full { background: #fee2e2; color: #991b1b; }
-        .cap-available { background: #dbeafe; color: #1e40af; }
-
-        .inventory-item { display: flex; align-items: center; padding: 14px; background: white; border-radius: 16px; margin-bottom: 10px; border: 1px solid #e2e8f0; gap: 12px; }
-        .imp-num { font-weight: 900; color: var(--accent); font-size: 1.1rem; min-width: 25px; }
-        .checkbox { width: 30px; height: 30px; border-radius: 8px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
-        
-        /* Compact Edit Button */
-        .btn-edit { background: #f1f5f9; color: #475569; width: auto; padding: 6px 10px; font-size: 0.7rem; margin: 0; height: 32px; flex-shrink: 0; }
-        .btn-undo { background: #fee2e2; color: #ef4444; width: auto; padding: 6px 10px; font-size: 0.7rem; margin: 0; height: auto; }
-        
-        #modalOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; display: none; align-items: center; justify-content: center; }
-        .modal { background: white; width: 90%; max-width: 400px; padding: 25px; border-radius: 20px; }
-
+        .inventory-item { display: flex; align-items: center; padding: 14px; background: white; border-radius: 16px; margin-bottom: 8px; border: 1px solid #e2e8f0; gap: 12px; }
+        .imp-num { font-weight: 900; color: var(--accent); font-size: 1rem; min-width: 20px; }
         .hidden { display: none; }
-        .planning-mode { border: 2px solid var(--accent); background: #f0f7ff; }
-        .staged-item { display: flex; align-items: center; padding: 12px; background: white; border: 1px solid #bfdbfe; border-radius: 10px; margin-bottom: 8px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="header">
-        <span class="section-title">ActionStream</span>
-        <button class="settings-btn" onclick="toggleModal(true)">⚙️ Limits</button>
-    </div>
+    <div class="dashboard">
+        <span class="section-title" style="color:rgba(255,255,255,0.5); margin:0 0 10px 0;">Weekly Capacity</span>
+        <div id="weekBar" class="week-bar"></div>
 
-    <div id="modalOverlay">
-        <div class="modal">
-            <h3 style="margin-top:0">Daily Capacity (Mins)</h3>
-            <label class="field-label">Mon - Fri</label>
-            <input type="number" id="setWeekday">
-            <label class="field-label">Sat - Sun</label>
-            <input type="number" id="setWeekend">
-            <div class="row">
-                <button onclick="saveSettings()" style="flex:2">Save</button>
-                <button onclick="toggleModal(false)" style="background:#64748b; flex:1">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="spotlight">
-        <div id="spotlightTitle" class="spotlight-task">Loading...</div>
-        <div id="spotlightDetails" style="font-size: 0.85rem; opacity: 0.85; margin-bottom: 20px;"></div>
-        <button id="spotlightBtn" style="background: white; color: var(--primary); border-radius: 14px; max-width: 240px; margin: auto;">Complete Action</button>
+        <span class="section-title" style="color:rgba(255,255,255,0.5); margin: 5px 0 10px 0;">Next 3 Priorities</span>
+        <div id="priorityDeck" class="priority-deck"></div>
     </div>
 
     <div class="card" id="goalCapture">
-        <span class="section-title" style="margin-top:0;">Stage 1: Define Goal</span>
-        <input id="mainGoal" placeholder="Project Name">
+        <span class="section-title" style="margin-top:0;">New Project</span>
+        <input id="mainGoal" placeholder="Goal Name">
         <div class="row">
-            <div><label class="field-label">Goal Deadline</label><input type="date" id="goalDate"></div>
-            <div class="narrow-50"><label class="field-label">Importance</label><select id="mainImp"></select></div>
+            <div><label style="font-size:0.7rem">Deadline</label><input type="date" id="goalDate"></div>
+            <div style="flex: 0 0 40%"><label style="font-size:0.7rem">Imp</label><select id="mainImp"></select></div>
         </div>
-        <button onclick="lockGoal()">Start Breakdown</button>
+        <button onclick="lockGoal()">Breakdown</button>
     </div>
 
-    <div class="card hidden planning-mode" id="planningArea">
-        <div id="displayGoal" style="font-weight: 800; border-bottom: 1px solid #bfdbfe; padding-bottom: 10px; margin-bottom: 10px;"></div>
+    <div class="card hidden" id="planningArea" style="border:2px solid var(--accent)">
+        <h3 id="displayGoal" style="margin:0 0 15px 0; font-size: 1rem;"></h3>
         <input id="stageTitle" placeholder="Action Title">
         <div class="row">
-            <div class="narrow-50"><label class="field-label">Mins</label><input type="number" id="stageMins" placeholder="Max 15"></div>
-            <div><label class="field-label">Action Date</label><input type="date" id="stageDate"></div>
+            <div style="flex:0 0 40%"><input type="number" id="stageMins" placeholder="Mins"></div>
+            <div><input type="date" id="stageDate"></div>
         </div>
-        <button onclick="addToStaging()" style="background: var(--success);">Add Action</button>
-        <div id="stagedList" style="margin: 15px 0;"></div>
+        <button onclick="addToStaging()" style="background:var(--success)">Add Action</button>
+        <div id="stagedList" style="margin:10px 0"></div>
         <div class="row">
-            <button onclick="finalisePlanning()" style="flex: 2;">Commit Strategy</button>
-            <button onclick="cancelPlanning()" style="background: #ef4444; flex: 1;">Cancel</button>
+            <button onclick="finalisePlanning()" style="flex:2">Commit</button>
+            <button onclick="cancelPlanning()" style="background:#64748b; flex:1">Back</button>
         </div>
     </div>
 
     <span class="section-title">Active Inventory</span>
     <div id="masterInventory"></div>
-    <span class="section-title">History</span>
-    <div id="historyList"></div>
 </div>
 
 <script>
     const CONFIG = { URL: "https://wuhklqulwhioiynoadtj.supabase.co", KEY: "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx" };
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
-    
-    // FIXED: Variables properly initialized
-    let masterTasks = [], stagingTasks = [], activeGoal = null, editingId = null;
-    let settings = { weekday_limit: 45, weekend_limit: 90 };
+    let masterTasks = [], stagingTasks = [], settings = { weekday_limit: 45, weekend_limit: 90 };
 
     const formatDate = (dStr) => { if(!dStr) return ""; const [y,m,d] = dStr.split("-"); return `${d}/${m}/${y.slice(-2)}`; };
 
@@ -133,131 +95,121 @@
 
     async function loadSettings() {
         const { data } = await client.from('user_settings').select('*').eq('id', 'default_user').single();
-        if (data) {
-            settings = data;
-            document.getElementById('setWeekday').value = data.weekday_limit;
-            document.getElementById('setWeekend').value = data.weekend_limit;
-        }
+        if (data) settings = data;
     }
-
-    async function saveSettings() {
-        settings.weekday_limit = parseInt(document.getElementById('setWeekday').value) || 45;
-        settings.weekend_limit = parseInt(document.getElementById('setWeekend').value) || 90;
-        await client.from('user_settings').upsert({ id: 'default_user', ...settings });
-        toggleModal(false);
-        renderMaster();
-    }
-
-    function toggleModal(show) { document.getElementById('modalOverlay').style.display = show ? 'flex' : 'none'; }
 
     async function refresh() {
         const { data: active } = await client.from('subtasks').select('*').eq('completed', false);
-        const { data: hist } = await client.from('subtasks').select('*').eq('completed', true).order('created_at', {ascending: false}).limit(3);
         masterTasks = active || [];
-        masterTasks.sort((a,b) => new Date(a.due_date) - new Date(b.due_date));
+        masterTasks.sort((a,b) => new Date(a.due_date) - new Date(b.due_date) || b.importance - a.importance);
+        renderDashboard();
         renderMaster();
-        renderHistory(hist || []);
+    }
+
+    function renderDashboard() {
+        // 1. Render Week Capacity Bar
+        const bar = document.getElementById('weekBar'); bar.innerHTML = '';
+        const today = new Date();
+        for(let i=0; i<7; i++) {
+            const d = new Date(today); d.setDate(today.getDate() + i);
+            const dStr = d.toISOString().split('T')[0];
+            const load = masterTasks.filter(t => t.due_date === dStr).reduce((s, t) => s + t.duration, 0);
+            const limit = (d.getDay() === 0 || d.getDay() === 6) ? settings.weekend_limit : settings.weekday_limit;
+            const perc = Math.min((load / limit) * 100, 100);
+            const color = load > limit ? 'var(--error)' : 'var(--success)';
+            
+            bar.innerHTML += `
+                <div class="day-cap">
+                    <div style="font-size:0.6rem; opacity:0.6">${['S','M','T','W','T','F','S'][d.getDay()]}</div>
+                    <div class="cap-dot" style="background:${color}; opacity:${0.3 + (perc/150)}"></div>
+                </div>`;
+        }
+
+        // 2. Render Top 3 Priorities
+        const deck = document.getElementById('priorityDeck'); deck.innerHTML = '';
+        const top3 = masterTasks.slice(0, 3);
+        
+        if(top3.length === 0) deck.innerHTML = '<div style="opacity:0.5; font-size:0.8rem">No pending actions.</div>';
+
+        top3.forEach(t => {
+            const div = document.createElement('div');
+            div.className = 'prio-card';
+            div.innerHTML = `
+                <div class="prio-info">
+                    <span class="prio-title">${t.title}</span>
+                    <span class="prio-meta">${formatDate(t.due_date)} • ${t.duration}m</span>
+                </div>
+                <div>
+                    <button class="btn-push" onclick='pushTask("${t.id}", "${t.due_date}", "${t.goal_deadline}")'>Delay</button>
+                    <button class="btn-done" onclick='completeTask("${t.id}")'>✓</button>
+                </div>
+            `;
+            deck.appendChild(div);
+        });
+    }
+
+    async function pushTask(id, currentStr, deadlineStr) {
+        const current = new Date(currentStr);
+        const tomorrow = new Date(current); tomorrow.setDate(current.getDate() + 1);
+        const tomStr = tomorrow.toISOString().split('T')[0];
+
+        // CHECK 1: Is tomorrow past the project deadline?
+        if (deadlineStr && tomStr > deadlineStr) {
+            return alert(`🚫 Cannot delay! Tomorrow is past the final project deadline (${formatDate(deadlineStr)}).`);
+        }
+
+        // CHECK 2: Is tomorrow already at capacity?
+        const load = masterTasks.filter(t => t.due_date === tomStr).reduce((s, t) => s + t.duration, 0);
+        const dayNum = tomorrow.getDay();
+        const limit = (dayNum === 0 || dayNum === 6) ? settings.weekend_limit : settings.weekday_limit;
+        
+        if (load >= limit) {
+            if (!confirm(`⚠️ Tomorrow is already at capacity (${load}/${limit}m). Delay anyway?`)) return;
+        }
+
+        await client.from('subtasks').update({ due_date: tomStr }).eq('id', id);
+        refresh();
     }
 
     function renderMaster() {
         const inv = document.getElementById('masterInventory'); inv.innerHTML = '';
-        if (masterTasks.length === 0) {
-            document.getElementById('spotlightTitle').innerText = "All Clear! 🚀";
-            document.getElementById('spotlightDetails').innerText = "Inventory empty.";
-            document.getElementById('spotlightBtn').style.display = 'none';
-        } else {
-            const t = masterTasks[0];
-            document.getElementById('spotlightTitle').innerText = t.title;
-            document.getElementById('spotlightDetails').innerText = `${t.duration}m | Due: ${formatDate(t.due_date)}`;
-            document.getElementById('spotlightBtn').style.display = 'block';
-            document.getElementById('spotlightBtn').onclick = () => completeTask(t);
-        }
-
-        masterTasks.forEach(t => {
-            const dayLoad = masterTasks.filter(x => x.due_date === t.due_date).reduce((s, x) => s + x.duration, 0);
-            const dayNum = new Date(t.due_date).getDay();
-            const limit = (dayNum === 0 || dayNum === 6) ? settings.weekend_limit : settings.weekday_limit;
-            const isFull = dayLoad >= limit;
-            const isLocked = t.goal_deadline && t.due_date >= t.goal_deadline;
-
+        masterTasks.slice(3).forEach(t => {
             const d = document.createElement('div');
             d.className = 'inventory-item';
-            d.innerHTML = `
-                <div class="imp-num">${t.importance}</div>
-                <div style="flex:1; overflow:hidden;">
-                    <div style="font-weight:700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.title}</div>
-                    <small>${formatDate(t.due_date)} • ${t.duration}m</small><br>
-                    <span class="capacity-pill ${isFull ? 'cap-full' : 'cap-available'}">${dayLoad}/${limit}m</span>
-                    ${isLocked ? '<span class="capacity-pill" style="background:#e2e8f0; color:#475569">LOCKED</span>' : ''}
-                </div>
-                <button class="btn-edit" onclick='editTask(${JSON.stringify(t)})'>Edit</button>
-                <input type="checkbox" class="checkbox" onclick='completeTask(${JSON.stringify(t)})'>
-            `;
+            d.innerHTML = `<div class="imp-num">${t.importance}</div>
+                <div style="flex:1"><b>${t.title}</b><br><small>${formatDate(t.due_date)} • ${t.duration}m</small></div>
+                <button class="btn-done" style="width:30px; height:30px; font-size:0.7rem" onclick='completeTask("${t.id}")'>✓</button>`;
             inv.appendChild(d);
         });
     }
 
+    // Capture Logic
     function lockGoal() {
-        const goal = document.getElementById('mainGoal').value;
-        const date = document.getElementById('goalDate').value;
-        if(!goal || !date) return alert("Goal & Date required");
-        activeGoal = { goal, date, imp: document.getElementById('mainImp').value };
-        document.getElementById('displayGoal').innerText = `${goal} (${formatDate(date)})`;
-        document.getElementById('stageDate').value = date;
+        const g = document.getElementById('mainGoal').value;
+        const d = document.getElementById('goalDate').value;
+        if(!g || !d) return alert("Goal & Date required");
+        activeGoal = { goal: g, date: d, imp: document.getElementById('mainImp').value };
+        document.getElementById('displayGoal').innerText = g;
+        document.getElementById('stageDate').value = d;
         document.getElementById('goalCapture').classList.add('hidden');
         document.getElementById('planningArea').classList.remove('hidden');
     }
 
     function addToStaging() {
-        const title = document.getElementById('stageTitle').value;
-        const mins = parseInt(document.getElementById('stageMins').value);
-        const date = document.getElementById('stageDate').value;
-        if(!title || !mins || !date) return alert("Missing info");
-        stagingTasks.push({ title, duration: mins, due_date: date });
+        stagingTasks.push({ title: document.getElementById('stageTitle').value, duration: document.getElementById('stageMins').value, due_date: document.getElementById('stageDate').value });
         document.getElementById('stageTitle').value = '';
-        renderStaging();
-    }
-
-    function renderStaging() {
-        document.getElementById('stagedList').innerHTML = stagingTasks.map(t => `<div class="staged-item"><b>${t.title}</b> (${t.duration}m)</div>`).join('');
+        document.getElementById('stagedList').innerHTML = stagingTasks.map(t => `<div style="font-size:0.8rem; margin-bottom:4px;">• ${t.title}</div>`).join('');
     }
 
     async function finalisePlanning() {
-        if(stagingTasks.length === 0) return cancelPlanning();
-        const toInsert = stagingTasks.map(t => ({
-            title: `${activeGoal.goal}: ${t.title}`,
-            duration: t.duration,
-            due_date: t.due_date,
-            importance: activeGoal.imp,
-            goal_deadline: activeGoal.date
-        }));
+        const toInsert = stagingTasks.map(t => ({ title: `${activeGoal.goal}: ${t.title}`, duration: t.duration, due_date: t.due_date, importance: activeGoal.imp, goal_deadline: activeGoal.date }));
         await client.from('subtasks').insert(toInsert);
         cancelPlanning();
         refresh();
     }
 
-    async function completeTask(t) { await client.from('subtasks').update({completed: true}).eq('id', t.id); refresh(); }
-    
-    async function editTask(t) {
-        editingId = t.id;
-        document.getElementById('stageTitle').value = t.title.split(': ')[1] || t.title;
-        document.getElementById('stageMins').value = t.duration;
-        document.getElementById('stageDate').value = t.due_date;
-        activeGoal = { goal: t.title.split(': ')[0], date: t.goal_deadline || t.due_date, imp: t.importance };
-        document.getElementById('goalCapture').classList.add('hidden');
-        document.getElementById('planningArea').classList.remove('hidden');
-        // Logic for single task update would go here or via re-staging
-    }
-
-    function cancelPlanning() { 
-        document.getElementById('planningArea').classList.add('hidden'); 
-        document.getElementById('goalCapture').classList.remove('hidden'); 
-        stagingTasks = []; 
-        document.getElementById('mainGoal').value = '';
-        document.getElementById('goalDate').value = '';
-    }
-
-    function renderHistory(tasks) { document.getElementById('historyList').innerHTML = tasks.map(t => `<div class="inventory-item" style="opacity:0.5; padding:10px;"><strike>${t.title}</strike></div>`).join(''); }
+    function cancelPlanning() { document.getElementById('planningArea').classList.add('hidden'); document.getElementById('goalCapture').classList.remove('hidden'); stagingTasks = []; }
+    async function completeTask(id) { await client.from('subtasks').update({completed: true}).eq('id', id); refresh(); }
 </script>
 </body>
 </html>
