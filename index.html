@@ -3,14 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ActionStream | Lifecycle GTD</title>
+    <title>ActionStream | Capacity Pro</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
-        :root { --bg: #f8fafc; --card: #ffffff; --primary: #0f172a; --accent: #2563eb; --text: #1e293b; --error: #ef4444; --success: #10b981; }
+        :root { --bg: #f8fafc; --card: #ffffff; --primary: #0f172a; --accent: #2563eb; --text: #1e293b; --error: #ef4444; --success: #10b981; --warn: #f59e0b; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 12px; }
-        .container { max-width: 500px; margin: auto; padding-bottom: 80px; }
+        .container { max-width: 500px; margin: auto; padding-bottom: 80px; position: relative; }
+
+        /* Settings Header */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .settings-btn { background: none; border: 1px solid #cbd5e1; color: var(--text); padding: 8px 12px; border-radius: 8px; width: auto; height: auto; font-size: 14px; }
 
         #spotlight { 
             background: var(--primary); color: white; padding: 30px 15px; border-radius: 24px; 
@@ -21,11 +25,7 @@
         .card { background: var(--card); padding: 20px; border-radius: 18px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
         .section-title { font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1.2px; margin: 25px 0 15px; display: block; }
         
-        input, select, button { 
-            padding: 14px; border-radius: 12px; border: 1px solid #cbd5e1; 
-            font-size: 16px; width: 100%; margin-bottom: 12px; outline: none;
-            height: 50px; 
-        }
+        input, select, button { padding: 14px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; width: 100%; margin-bottom: 12px; outline: none; height: 50px; }
         button { background: var(--accent); color: white; font-weight: 700; border: none; cursor: pointer; height: auto; padding: 16px; }
         
         .row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
@@ -34,69 +34,72 @@
 
         .field-label { font-size: 0.75rem; font-weight: 600; color: #475569; margin-bottom: 4px; display: block; }
 
-        .staged-item { display: flex; align-items: center; padding: 14px; background: white; border: 1px solid #bfdbfe; border-radius: 12px; margin-bottom: 12px; }
-        .recur-pill { background: #dcfce7; color: #166534; font-size: 0.65rem; padding: 3px 8px; border-radius: 6px; font-weight: 800; text-transform: uppercase; }
+        /* Capacity Indicators */
+        .capacity-pill { font-size: 0.65rem; padding: 4px 8px; border-radius: 6px; font-weight: 800; display: inline-block; margin-top: 5px; }
+        .cap-safe { background: #dcfce7; color: #166534; }
+        .cap-full { background: #fee2e2; color: #991b1b; }
+        .cap-available { background: #dbeafe; color: #1e40af; }
 
         .inventory-item { display: flex; align-items: center; padding: 16px; background: white; border-radius: 16px; margin-bottom: 10px; border: 1px solid #e2e8f0; }
         .imp-num { font-weight: 900; color: var(--accent); font-size: 1.2rem; min-width: 35px; }
         .checkbox { width: 34px; height: 34px; border-radius: 10px; accent-color: var(--accent); cursor: pointer; }
         
+        /* Modal Overlay */
+        #modalOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; display: none; align-items: center; justify-content: center; }
+        .modal { background: white; width: 90%; max-width: 400px; padding: 25px; border-radius: 20px; }
+
         .hidden { display: none; }
         .planning-mode { border: 2px solid var(--accent); background: #f0f7ff; }
-
-        .recur-link { font-size: 0.8rem; color: var(--accent); cursor: pointer; text-decoration: underline; background: none; border: none; margin-bottom: 15px; width: auto; padding: 0; height: auto; display: inline-block; font-weight: 600; }
+        .staged-item { display: flex; align-items: center; padding: 14px; background: white; border: 1px solid #bfdbfe; border-radius: 12px; margin-bottom: 12px; }
     </style>
 </head>
 <body>
 
 <div class="container">
+    <div class="header">
+        <span class="section-title">ActionStream</span>
+        <button class="settings-btn" onclick="toggleModal(true)">⚙️ Settings</button>
+    </div>
+
+    <div id="modalOverlay">
+        <div class="modal">
+            <h3 style="margin-top:0">Daily Capacity (Mins)</h3>
+            <label class="field-label">Mon - Fri</label>
+            <input type="number" id="setWeekday" placeholder="45">
+            <label class="field-label">Sat - Sun</label>
+            <input type="number" id="setWeekend" placeholder="90">
+            <div class="row">
+                <button onclick="saveSettings()" style="flex:2">Save</button>
+                <button onclick="toggleModal(false)" style="background:#64748b; flex:1">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div id="spotlight">
-        <span class="section-title" style="color: rgba(255,255,255,0.6); margin-top:0;">Top Priority</span>
         <div id="spotlightTitle" class="spotlight-task">Loading...</div>
         <div id="spotlightDetails" style="font-size: 0.85rem; opacity: 0.85; margin-bottom: 20px;"></div>
         <button id="spotlightBtn" style="background: white; color: var(--primary); border-radius: 14px; max-width: 240px; margin: auto;">Complete Action</button>
     </div>
 
     <div class="card" id="goalCapture">
-        <span class="section-title" style="margin-top:0;">Stage 1: Define Project Rule</span>
+        <span class="section-title" style="margin-top:0;">Stage 1: Define Goal</span>
         <input id="mainGoal" placeholder="Project Name">
         <div class="row">
             <div><label class="field-label">Goal Deadline</label><input type="date" id="goalDate"></div>
             <div class="narrow-50"><label class="field-label">Importance</label><select id="mainImp"></select></div>
         </div>
-        <button class="recur-link" onclick="toggleRecur('recurContainerMain')">+ Set Project Recurrence</button>
-        <div id="recurContainerMain" class="hidden">
-            <label class="field-label">Frequency</label>
-            <select id="mainRecur">
-                <option value="none">One-off Project</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="fortnightly">Fortnightly</option>
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-                <option value="bi-annually">Bi-Annually</option>
-                <option value="annually">Annually</option>
-            </select>
-        </div>
-        <button onclick="lockGoal()" style="width: 100%; margin-top: 10px;">Start Breakdown</button>
+        <button onclick="lockGoal()">Start Breakdown</button>
     </div>
 
     <div class="card hidden planning-mode" id="planningArea">
-        <div style="border-bottom: 1px solid #bfdbfe; padding-bottom: 12px; margin-bottom: 15px;">
-            <div style="display:flex; justify-content: space-between; align-items: flex-start;">
-                <h2 id="displayGoal" style="margin:0; font-size: 1.1rem; font-weight: 800; flex:1;"></h2>
-                <div id="displayRecur" class="recur-pill"></div>
-            </div>
-            <div id="displayImp" style="font-weight: 900; color: var(--accent); font-size: 0.9rem; margin-top: 4px;"></div>
-        </div>
-        <label class="field-label">Action Title</label>
-        <input id="stageTitle" placeholder="Next physical step">
+        <div id="displayGoal" style="font-weight: 800; border-bottom: 1px solid #bfdbfe; padding-bottom: 10px; margin-bottom: 10px;"></div>
+        <input id="stageTitle" placeholder="Action Title">
         <div class="row">
-            <div class="narrow-50"><label class="field-label">Mins</label><input type="number" id="stageMins" placeholder="Max 15"></div>
+            <div class="narrow-50"><label class="field-label">Mins</label><input type="number" id="stageMins"></div>
             <div><label class="field-label">Action Date</label><input type="date" id="stageDate"></div>
         </div>
-        <button onclick="addToStaging()" style="background: var(--success); width: 100%;">Add to Sequence</button>
-        <div id="stagedList" style="margin: 25px 0;"></div>
+        <button onclick="addToStaging()" style="background: var(--success);">Add Action</button>
+        <div id="stagedList" style="margin: 15px 0;"></div>
         <div class="row">
             <button onclick="finalisePlanning()" style="flex: 2;">Commit Strategy</button>
             <button onclick="cancelPlanning()" style="background: #ef4444; flex: 1;">Cancel</button>
@@ -105,159 +108,132 @@
 
     <span class="section-title">Active Inventory</span>
     <div id="masterInventory"></div>
-    <span class="section-title">Recently Completed</span>
+    <span class="section-title">History</span>
     <div id="historyList"></div>
 </div>
 
 <script>
     const CONFIG = { URL: "https://wuhklqulwhioiynoadtj.supabase.co", KEY: "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx" };
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
-    let masterTasks = [], historyTasks = [], stagingTasks = [], activeGoal = null;
+    let masterTasks = [], settings = { weekday_limit: 45, weekend_limit: 90 };
 
-    const formatDate = (dateStr) => {
-        if (!dateStr) return "";
-        const [y, m, d] = dateStr.split("-");
-        return `${d}/${m}/${y.slice(-2)}`;
-    };
+    const formatDate = (dStr) => { const [y,m,d] = dStr.split("-"); return `${d}/${m}/${y.slice(-2)}`; };
 
-    window.onload = () => {
+    window.onload = async () => {
         const sel = document.getElementById('mainImp');
         for(let i=1; i<=10; i++) sel.options[sel.options.length] = new Option(i, i);
-        Sortable.create(document.getElementById('stagedList'), { animation: 150, onEnd: () => {
-            const items = Array.from(document.querySelectorAll('.staged-item'));
-            stagingTasks = items.map(el => stagingTasks[parseInt(el.dataset.idx)]);
-            renderStaging();
-        }});
+        await loadSettings();
         refresh();
     };
 
-    function toggleRecur(id) { document.getElementById(id).classList.toggle('hidden'); }
+    async function loadSettings() {
+        const { data } = await client.from('user_settings').select('*').eq('id', 'default_user').single();
+        if (data) {
+            settings = data;
+            document.getElementById('setWeekday').value = data.weekday_limit;
+            document.getElementById('setWeekend').value = data.weekend_limit;
+        }
+    }
+
+    async function saveSettings() {
+        settings.weekday_limit = parseInt(document.getElementById('setWeekday').value);
+        settings.weekend_limit = parseInt(document.getElementById('setWeekend').value);
+        await client.from('user_settings').upsert({ id: 'default_user', ...settings });
+        toggleModal(false);
+        renderMaster();
+    }
+
+    function toggleModal(show) { document.getElementById('modalOverlay').style.display = show ? 'flex' : 'none'; }
 
     async function refresh() {
         const { data: active } = await client.from('subtasks').select('*').eq('completed', false);
-        const { data: history } = await client.from('subtasks').select('*').eq('completed', true).order('created_at', { ascending: false }).limit(5);
+        const { data: hist } = await client.from('subtasks').select('*').eq('completed', true).order('created_at', {ascending: false}).limit(3);
         masterTasks = active || [];
-        historyTasks = history || [];
-        masterTasks.sort((a, b) => new Date(a.due_date) - new Date(b.due_date) || (a.importance_ranking - b.importance_ranking));
+        masterTasks.sort((a,b) => new Date(a.due_date) - new Date(b.due_date));
         renderMaster();
-        renderHistory();
+        renderHistory(hist);
     }
 
-    function lockGoal() {
-        const goal = document.getElementById('mainGoal').value;
-        const date = document.getElementById('goalDate').value;
-        const imp = document.getElementById('mainImp').value;
-        const recur = document.getElementById('mainRecur').value;
-        if (!goal || !date) return alert("Details missing.");
-        activeGoal = { goal, date, imp, recur };
-        document.getElementById('displayGoal').innerText = goal;
-        document.getElementById('displayImp').innerText = "Importance: " + imp;
-        document.getElementById('displayRecur').innerText = recur !== 'none' ? recur : "";
-        document.getElementById('stageDate').value = date;
-        document.getElementById('goalCapture').classList.add('hidden');
-        document.getElementById('planningArea').classList.remove('hidden');
+    function calculateDayLoad(dateStr) {
+        return masterTasks.filter(t => t.due_date === dateStr).reduce((acc, t) => acc + t.duration, 0);
     }
 
-    function addToStaging() {
-        const title = document.getElementById('stageTitle').value;
-        const date = document.getElementById('stageDate').value;
-        const mins = parseInt(document.getElementById('stageMins').value);
-        if (!title || !mins || !date || mins > 15) return alert("Error: 15min limit.");
-        stagingTasks.push({ title, date, mins });
-        document.getElementById('stageTitle').value = '';
-        renderStaging();
-    }
-
-    async function finalisePlanning() {
-        if (stagingTasks.length === 0) return cancelPlanning();
-        const toInsert = stagingTasks.map((t, i) => ({ 
-            title: `${activeGoal.goal}: ${t.title}`, importance: activeGoal.imp, duration: t.mins, due_date: t.date, recurrence: activeGoal.recur, importance_ranking: i 
-        }));
-        await client.from('subtasks').insert(toInsert);
-        document.getElementById('mainGoal').value = '';
-        document.getElementById('goalDate').value = '';
-        document.getElementById('mainImp').selectedIndex = 0;
-        document.getElementById('mainRecur').value = 'none';
-        document.getElementById('recurContainerMain').classList.add('hidden');
-        cancelPlanning();
-        refresh();
-    }
-
-    async function completeTask(task) {
-        // RECURRENCE LOGIC: If a recurring task is completed, create the next one
-        if (task.recurrence && task.recurrence !== 'none') {
-            const nextDate = new Date(task.due_date);
-            switch(task.recurrence) {
-                case 'daily': nextDate.setDate(nextDate.getDate() + 1); break;
-                case 'weekly': nextDate.setDate(nextDate.getDate() + 7); break;
-                case 'fortnightly': nextDate.setDate(nextDate.getDate() + 14); break;
-                case 'monthly': nextDate.setMonth(nextDate.getMonth() + 1); break;
-                case 'quarterly': nextDate.setMonth(nextDate.getMonth() + 3); break;
-                case 'bi-annually': nextDate.setMonth(nextDate.getMonth() + 6); break;
-                case 'annually': nextDate.setFullYear(nextDate.getFullYear() + 1); break;
-            }
-            
-            // Insert the next occurrence
-            await client.from('subtasks').insert([{
-                title: task.title,
-                importance: task.importance,
-                duration: task.duration,
-                due_date: nextDate.toISOString().split('T')[0],
-                completed: false,
-                recurrence: task.recurrence,
-                importance_ranking: task.importance_ranking
-            }]);
-        }
-        
-        await client.from('subtasks').update({ completed: true }).eq('id', task.id);
-        refresh();
+    function getLimitForDate(dateStr) {
+        const day = new Date(dateStr).getDay();
+        return (day === 0 || day === 6) ? settings.weekend_limit : settings.weekday_limit;
     }
 
     function renderMaster() {
         const inv = document.getElementById('masterInventory'); inv.innerHTML = '';
         if (masterTasks.length === 0) {
-            document.getElementById('spotlightTitle').innerText = "All Clear! 🚀";
-            document.getElementById('spotlightDetails').innerText = "Inventory empty.";
+            document.getElementById('spotlightTitle').innerText = "Clear! 🚀";
             document.getElementById('spotlightBtn').style.display = 'none';
         } else {
             const t = masterTasks[0];
             document.getElementById('spotlightTitle').innerText = t.title;
-            document.getElementById('spotlightDetails').innerText = `${t.duration}m | Due: ${formatDate(t.due_date)}`;
             document.getElementById('spotlightBtn').style.display = 'block';
             document.getElementById('spotlightBtn').onclick = () => completeTask(t);
         }
+
         masterTasks.forEach(t => {
-            const d = document.createElement('div'); d.className = 'inventory-item';
-            d.innerHTML = `<div class="imp-num">${t.importance}</div><div style="flex:1"><b>${t.title}</b><br><small>${formatDate(t.due_date)} • ${t.duration}m ${t.recurrence !== 'none' ? `[${t.recurrence}]` : ''}</small></div>
-            <input type="checkbox" class="checkbox" style="margin-left:10px;" onclick='completeTask(${JSON.stringify(t)})'>`;
+            const load = calculateDayLoad(t.due_date);
+            const limit = getLimitForDate(t.due_date);
+            const isFull = load >= limit;
+            const canPush = t.goal_deadline ? new Date(t.due_date) < new Date(t.goal_deadline) : true;
+
+            const d = document.createElement('div');
+            d.className = 'inventory-item';
+            d.innerHTML = `
+                <div class="imp-num">${t.importance}</div>
+                <div style="flex:1">
+                    <b>${t.title}</b><br>
+                    <small>${formatDate(t.due_date)} • ${t.duration}m</small><br>
+                    <span class="capacity-pill ${isFull ? 'cap-full' : 'cap-available'}">
+                        Day Load: ${load}/${limit}m ${isFull ? ' (Full)' : ''}
+                    </span>
+                    ${!canPush ? '<br><span class="capacity-pill" style="background:#e2e8f0; color:#475569">LOCKED: Deadline Reached</span>' : ''}
+                </div>
+                <button class="btn-edit" onclick='editTask(${JSON.stringify(t)})' style="margin-right:5px">Edit</button>
+                <input type="checkbox" class="checkbox" onclick='completeTask(${JSON.stringify(t)})'>
+            `;
             inv.appendChild(d);
         });
     }
 
-    async function undoComplete(id) {
-        await client.from('subtasks').update({ completed: false }).eq('id', id);
-        refresh();
+    // Capture/Planning Logic (Stage 1 & 2)
+    function lockGoal() {
+        activeGoal = { goal: document.getElementById('mainGoal').value, date: document.getElementById('goalDate').value, imp: document.getElementById('mainImp').value };
+        document.getElementById('displayGoal').innerText = activeGoal.goal + " (" + formatDate(activeGoal.date) + ")";
+        document.getElementById('stageDate').value = activeGoal.date;
+        document.getElementById('goalCapture').classList.add('hidden');
+        document.getElementById('planningArea').classList.remove('hidden');
     }
 
-    function cancelPlanning() {
-        stagingTasks = []; activeGoal = null;
-        document.getElementById('planningArea').classList.add('hidden');
-        document.getElementById('goalCapture').classList.remove('hidden');
+    function addToStaging() {
+        stagingTasks.push({ title: document.getElementById('stageTitle').value, duration: document.getElementById('stageMins').value, due_date: document.getElementById('stageDate').value });
+        renderStaging();
     }
 
     function renderStaging() {
-        const list = document.getElementById('stagedList');
-        list.innerHTML = stagingTasks.map((t, i) => `<div class="staged-item" data-idx="${i}"><div style="flex:1;"><b>${t.title}</b><br><small>${formatDate(t.date)} • ${t.mins}m</small></div></div>`).join('');
+        document.getElementById('stagedList').innerHTML = stagingTasks.map(t => `<div class="staged-item">${t.title} (${t.duration}m)</div>`).join('');
     }
 
-    function renderHistory() {
-        const h = document.getElementById('historyList'); h.innerHTML = '';
-        historyTasks.forEach(t => {
-            const d = document.createElement('div'); d.className = 'inventory-item'; d.style.opacity = '0.6';
-            d.innerHTML = `<div style="flex:1"><strike>${t.title}</strike></div><button style="background:#fee2e2; color:#ef4444; width:auto; padding:6px 10px; font-size:0.7rem; height:auto; border-radius:8px;" onclick="undoComplete(${t.id})">Undo</button>`;
-            h.appendChild(d);
-        });
+    async function finalisePlanning() {
+        const toInsert = stagingTasks.map(t => ({
+            title: `${activeGoal.goal}: ${t.title}`,
+            duration: t.duration,
+            due_date: t.due_date,
+            importance: activeGoal.imp,
+            goal_deadline: activeGoal.date // KEY: Save the project deadline to the task
+        }));
+        await client.from('subtasks').insert(toInsert);
+        cancelPlanning();
+        refresh();
     }
+
+    async function completeTask(t) { await client.from('subtasks').update({completed: true}).eq('id', t.id); refresh(); }
+    function cancelPlanning() { document.getElementById('planningArea').classList.add('hidden'); document.getElementById('goalCapture').classList.remove('hidden'); stagingTasks = []; }
+    function renderHistory(tasks) { document.getElementById('historyList').innerHTML = tasks.map(t => `<div class="inventory-item" style="opacity:0.5"><strike>${t.title}</strike></div>`).join(''); }
 </script>
 </body>
 </html>
