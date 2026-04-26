@@ -202,28 +202,79 @@
     }
 
     /* --- Core Actions --- */
-    async function completeTask(id) {
-        const task = masterTasks.find(t => t.id == id);
-        await client.from('subtasks').update({ completed: true, updated_at: new Date().toISOString() }).eq('id', id);
-        if (task.recurrence_rule && task.project_id) {
-            const projectTasks = masterTasks.filter(t => t.project_id === task.project_id && t.id != id);
-            if (projectTasks.length === 0) handleRecurrence(task);
-        }
-        refresh();
-    }
+   async function completeTask(id) {
+    // 1. Find the task in our local list first
+    const task = masterTasks.find(t => t.id == id);
+    if (!task) return;
 
-    function handleRecurrence(task) {
-        const offsets = { Daily: 1, Weekly: 7, Fortnightly: 14, Monthly: 30, Quarterly: 90, 'Bi-annually': 182, Annually: 365 };
-        client.from('subtasks').select('*').eq('project_id', task.project_id).then(({data}) => {
-            const newProjId = 'proj_' + Date.now();
-            const newTasks = data.map(t => {
-                let d = new Date(t.due_date); d.setDate(d.getDate() + offsets[task.recurrence_rule]);
-                let g = new Date(t.goal_deadline); g.setDate(g.getDate() + offsets[task.recurrence_rule]);
-                return { ...t, id: undefined, completed: false, project_id: newProjId, due_date: d.toISOString().split('T')[0], goal_deadline: g.toISOString().split('T')[0] };
-            });
-            client.from('subtasks').insert(newTasks).then(refresh);
-        });
+    // 2. Mark it complete in Supabase
+    const { error } = await client.from('subtasks')
+        .update({ completed: true, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+    if (error) return console.error("Complete Error:", error);
+
+    // 3. Recurrence Logic: Check if this was a recurring project
+    if (task.recurrence_rule && task.project_id) {
+        // Fetch all REMAINING active tasks for this specific project
+        const { data: remaining } = await client.from('subtasks')
+            .select('id')
+            .eq('project_id', task.project_id)
+            .eq('completed', false);
+
+        // If no active tasks left, trigger the next cycle
+        if (!remaining || remaining.length === 0) {
+            console.log("Project cycle complete. Triggering recurrence...");
+            await handleRecurrence(task);
+        }
     }
+    refresh();
+}
+
+async function handleRecurrence(task) {
+    const offsets = { 
+        Daily: 1, Weekly: 7, Fortnightly: 14, Monthly: 30, 
+        Quarterly: 90, 'Bi-annually': 182, Annually: 365 
+    };
+    
+    const daysToAdd = offsets[task.recurrence_rule];
+    if (!daysToAdd) return;
+
+    // Fetch the "Golden Copy" (all tasks from the project we just finished)
+    const { data: templateTasks, error } = await client.from('subtasks')
+        .select('*')
+        .eq('project_id', task.project_id);
+
+    if (error || !templateTasks) return;
+
+    const newProjId = 'proj_' + Date.now();
+    
+    // Create the new batch with shifted dates
+    const newBatch = templateTasks.map(t => {
+        // Shift Due Date
+        let d = new Date(t.due_date);
+        d.setDate(d.getDate() + daysToAdd);
+        
+        // Shift Project Deadline
+        let g = new Date(t.goal_deadline);
+        g.setDate(g.getDate() + daysToAdd);
+
+        return {
+            title: t.title,
+            duration: t.duration,
+            importance: t.importance,
+            due_date: d.toISOString().split('T')[0],
+            goal_deadline: g.toISOString().split('T')[0],
+            project_id: newProjId, // New ID for the new cycle
+            recurrence_rule: t.recurrence_rule,
+            completed: false,
+            updated_at: new Date().toISOString()
+        };
+    });
+
+    const { error: insertError } = await client.from('subtasks').insert(newBatch);
+    if (insertError) console.error("Recurrence Insert Error:", insertError);
+}
 
     async function editTask(id) {
         const t = masterTasks.find(task => task.id == id);
