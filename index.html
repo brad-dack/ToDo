@@ -130,8 +130,8 @@
         .row { display: flex; gap: 12px; align-items: flex-end; }
         .narrow { flex: 0 0 40%; }
 
-        /* Inventory List */
-        .inventory-item { 
+        /* ToDo List */
+        .ToDo-item { 
             display: flex; 
             align-items: center; 
             padding: 16px; 
@@ -198,8 +198,8 @@
         </div>
     </div>
 
-    <span class="section-title">Active Inventory</span>
-    <div id="masterInventory"></div>
+    <span class="section-title">Active ToDo</span>
+    <div id="masterToDo"></div>
 </div>
 
 <script>
@@ -286,12 +286,12 @@
     }
 
     function renderMaster() {
-        const inv = document.getElementById('masterInventory'); 
+        const inv = document.getElementById('masterToDo'); 
         inv.innerHTML = '';
         // Rest of the tasks excluding top 3
         masterTasks.slice(3).forEach(t => {
             const d = document.createElement('div');
-            d.className = 'inventory-item';
+            d.className = 'ToDo-item';
             d.innerHTML = `
                 <div class="imp-badge">${t.importance}</div>
                 <div style="flex:1; overflow:hidden;">
