@@ -229,21 +229,36 @@
     function showError(m) { const e = document.getElementById('valError'); e.innerText = m; e.style.display = 'block'; setTimeout(() => e.style.display='none', 3000); }
 
     function renderMaster() {
-        const inv = document.getElementById('masterInventory'); inv.innerHTML = '';
-        if (masterTasks.length > 0) {
-            const t = masterTasks[0];
-            document.getElementById('spotlightTitle').innerText = t.title;
-            document.getElementById('spotlightDetails').innerText = `${t.duration}m | Due: ${t.due_date}`;
-            document.getElementById('spotlightBtn').onclick = () => completeTask(t);
-        }
-        masterTasks.forEach(t => {
-            const d = document.createElement('div'); d.className = 'inventory-item';
-            d.innerHTML = `<div class="imp-num">${t.importance}</div><div style="flex:1"><b>${t.title}</b><br><small>${t.due_date} • ${t.duration}m</small></div>
-            <button class="btn-edit" onclick='editTask(${JSON.stringify(t)})'>Edit</button>
-            <input type="checkbox" class="checkbox" style="margin-left:10px;" onclick='completeTask(${JSON.stringify(t)})'>`;
-            inv.appendChild(d);
-        });
+    const inv = document.getElementById('masterInventory'); 
+    inv.innerHTML = '';
+    const spotlightTitle = document.getElementById('spotlightTitle');
+    const spotlightDetails = document.getElementById('spotlightDetails');
+    const spotlightBtn = document.getElementById('spotlightBtn');
+
+    // FIX: Clear Spotlight if no tasks remain
+    if (masterTasks.length === 0) {
+        spotlightTitle.innerText = "All Actions Done! 🚀";
+        spotlightDetails.innerText = "Inventory is clear. Take a break or plan a new goal.";
+        spotlightBtn.style.display = 'none';
+        return; // Exit early
     }
+
+    // Otherwise, populate Spotlight with the top priority
+    const t = masterTasks[0];
+    spotlightTitle.innerText = t.title;
+    spotlightDetails.innerText = `${t.duration}m | Due: ${t.due_date}`;
+    spotlightBtn.style.display = 'block';
+    spotlightBtn.onclick = () => completeTask(t);
+
+    // Render the rest of the list
+    masterTasks.forEach(t => {
+        const d = document.createElement('div'); d.className = 'inventory-item';
+        d.innerHTML = `<div class="imp-num">${t.importance}</div><div style="flex:1"><b>${t.title}</b><br><small>${t.due_date} • ${t.duration}m</small></div>
+        <button class="btn-edit" onclick='editTask(${JSON.stringify(t)})'>Edit</button>
+        <input type="checkbox" class="checkbox" style="margin-left:10px;" onclick='completeTask(${JSON.stringify(t)})'>`;
+        inv.appendChild(d);
+    });
+}
 
     function renderHistory() {
         const h = document.getElementById('historyList'); h.innerHTML = '';
