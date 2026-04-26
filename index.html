@@ -3,39 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ActionStream | Capacity Dashboard</title>
+    <title>ActionStream | Pro Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <style>
-        :root { --bg: #f1f5f9; --card: #ffffff; --primary: #0f172a; --accent: #2563eb; --text: #1e293b; --error: #ef4444; --success: #10b981; --warn: #f59e0b; }
+        :root { 
+            --bg: #f8fafc; 
+            --card: #ffffff; 
+            --primary: #0f172a; 
+            --accent: #2563eb; 
+            --text: #1e293b; 
+            --error: #ef4444; 
+            --success: #10b981; 
+            --border: #e2e8f0;
+        }
+
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 12px; }
-        .container { max-width: 500px; margin: auto; padding-bottom: 80px; }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: var(--bg); 
+            color: var(--text); 
+            margin: 0; 
+            padding: 12px; 
+            line-height: 1.5;
+        }
 
-        /* Dashboard & Spotlight */
-        .dashboard { background: var(--primary); color: white; padding: 20px; border-radius: 28px; margin-bottom: 25px; box-shadow: 0 15px 30px -10px rgba(15, 23, 42, 0.3); }
-        .week-bar { display: flex; gap: 4px; margin-bottom: 20px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 14px; }
+        .container { max-width: 500px; margin: auto; padding-bottom: 100px; }
+
+        /* Dashboard (Top Section) */
+        .dashboard { 
+            background: var(--primary); 
+            color: white; 
+            padding: 24px 20px; 
+            border-radius: 32px; 
+            margin-bottom: 25px; 
+            box-shadow: 0 20px 40px -12px rgba(15, 23, 42, 0.3); 
+        }
+
+        .week-bar { 
+            display: flex; 
+            gap: 6px; 
+            margin-bottom: 24px; 
+            background: rgba(255,255,255,0.05); 
+            padding: 12px; 
+            border-radius: 16px; 
+        }
+
         .day-cap { flex: 1; text-align: center; }
-        .cap-dot { height: 4px; width: 100%; border-radius: 2px; margin-top: 4px; }
-        
+        .cap-dot { height: 4px; width: 100%; border-radius: 2px; margin-top: 6px; transition: all 0.3s ease; }
+
+        /* Priority Deck Cards */
         .priority-deck { display: flex; flex-direction: column; gap: 12px; }
-        .prio-card { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between; }
-        .prio-info { flex: 1; }
-        .prio-title { font-weight: 800; font-size: 0.95rem; display: block; margin-bottom: 2px; }
-        .prio-meta { font-size: 0.75rem; opacity: 0.7; }
-
-        /* Controls */
-        .btn-push { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 12px; border-radius: 10px; font-size: 0.7rem; font-weight: 700; cursor: pointer; margin-right: 8px; }
-        .btn-done { background: var(--success); border: none; color: white; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; font-weight: 900; }
-
-        /* Standard Components */
-        .card { background: var(--card); padding: 20px; border-radius: 20px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
-        .section-title { font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1.2px; margin: 25px 0 10px; display: block; }
-        input, select, button { padding: 14px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 16px; width: 100%; margin-bottom: 12px; outline: none; height: 50px; }
-        button { background: var(--accent); color: white; font-weight: 700; border: none; cursor: pointer; height: auto; padding: 16px; }
-        .row { display: flex; gap: 10px; align-items: flex-end; }
         
-        .inventory-item { display: flex; align-items: center; padding: 14px; background: white; border-radius: 16px; margin-bottom: 8px; border: 1px solid #e2e8f0; gap: 12px; }
-        .imp-num { font-weight: 900; color: var(--accent); font-size: 1rem; min-width: 20px; }
+        .prio-card { 
+            background: rgba(255,255,255,0.05); 
+            padding: 16px; 
+            border-radius: 20px; 
+            border: 1px solid rgba(255,255,255,0.1); 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between;
+        }
+
+        .prio-info { flex: 1; overflow: hidden; margin-right: 12px; }
+        .prio-title { font-weight: 700; font-size: 0.95rem; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .prio-meta { font-size: 0.75rem; opacity: 0.6; display: block; margin-top: 2px; }
+
+        .prio-actions { display: flex; align-items: center; gap: 8px; }
+
+        /* Buttons */
+        button { font-family: inherit; cursor: pointer; transition: all 0.15s ease; border: none; }
+        
+        .btn-done { 
+            background: var(--accent); 
+            color: white; 
+            width: 42px; 
+            height: 42px; 
+            border-radius: 12px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            flex-shrink: 0;
+        }
+        .btn-done:active { transform: scale(0.9); }
+
+        .btn-push { 
+            background: rgba(255,255,255,0.1); 
+            color: white; 
+            padding: 0 14px; 
+            height: 42px; 
+            border-radius: 12px; 
+            font-size: 0.75rem; 
+            font-weight: 700; 
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* Forms & Inputs */
+        .card { background: var(--card); padding: 20px; border-radius: 24px; border: 1px solid var(--border); margin-bottom: 20px; }
+        
+        .section-title { 
+            font-size: 0.7rem; 
+            font-weight: 800; 
+            color: #64748b; 
+            text-transform: uppercase; 
+            letter-spacing: 1.5px; 
+            margin-bottom: 12px; 
+            display: block; 
+        }
+
+        input, select { 
+            width: 100%; 
+            height: 50px; 
+            padding: 0 16px; 
+            border-radius: 14px; 
+            border: 1px solid #cbd5e1; 
+            font-size: 16px; 
+            margin-bottom: 12px; 
+            background: #fff;
+            outline: none;
+        }
+
+        input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+
+        .submit-btn { background: var(--accent); color: white; width: 100%; height: 54px; border-radius: 16px; font-weight: 700; font-size: 1rem; }
+
+        .row { display: flex; gap: 12px; align-items: flex-end; }
+        .narrow { flex: 0 0 40%; }
+
+        /* Inventory List */
+        .inventory-item { 
+            display: flex; 
+            align-items: center; 
+            padding: 16px; 
+            background: white; 
+            border-radius: 18px; 
+            margin-bottom: 10px; 
+            border: 1px solid var(--border); 
+            gap: 12px;
+        }
+        .imp-badge { font-weight: 900; color: var(--accent); font-size: 0.9rem; min-width: 24px; text-align: center; }
+
         .hidden { display: none; }
     </style>
 </head>
@@ -43,35 +150,51 @@
 
 <div class="container">
     <div class="dashboard">
-        <span class="section-title" style="color:rgba(255,255,255,0.5); margin:0 0 10px 0;">Weekly Capacity</span>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <span class="section-title" style="color:rgba(255,255,255,0.5); margin:0;">Forecast</span>
+            <button onclick="toggleSettings()" style="background:none; color:white; font-size:0.7rem; opacity:0.5; border:1px solid rgba(255,255,255,0.2); padding:4px 8px; border-radius:6px;">SETTINGS</button>
+        </div>
+        
         <div id="weekBar" class="week-bar"></div>
 
-        <span class="section-title" style="color:rgba(255,255,255,0.5); margin: 5px 0 10px 0;">Next 3 Priorities</span>
+        <span class="section-title" style="color:rgba(255,255,255,0.5); margin: 0 0 12px 0;">Next 3 Priorities</span>
         <div id="priorityDeck" class="priority-deck"></div>
     </div>
 
     <div class="card" id="goalCapture">
-        <span class="section-title" style="margin-top:0;">New Project</span>
-        <input id="mainGoal" placeholder="Goal Name">
+        <span class="section-title">New Project Goal</span>
+        <input id="mainGoal" placeholder="e.g., SEO Website Launch">
         <div class="row">
-            <div><label style="font-size:0.7rem">Deadline</label><input type="date" id="goalDate"></div>
-            <div style="flex: 0 0 40%"><label style="font-size:0.7rem">Imp</label><select id="mainImp"></select></div>
+            <div>
+                <label style="font-size:0.7rem; font-weight:700; color:#64748b; margin-left:4px">Target Deadline</label>
+                <input type="date" id="goalDate">
+            </div>
+            <div class="narrow">
+                <label style="font-size:0.7rem; font-weight:700; color:#64748b; margin-left:4px">Importance</label>
+                <select id="mainImp"></select>
+            </div>
         </div>
-        <button onclick="lockGoal()">Breakdown</button>
+        <button class="submit-btn" onclick="lockGoal()">Break into Actions</button>
     </div>
 
-    <div class="card hidden" id="planningArea" style="border:2px solid var(--accent)">
-        <h3 id="displayGoal" style="margin:0 0 15px 0; font-size: 1rem;"></h3>
-        <input id="stageTitle" placeholder="Action Title">
+    <div class="card hidden" id="planningArea" style="border: 2px solid var(--accent); background: #f0f7ff;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h3 id="displayGoal" style="margin:0; font-size:1rem;"></h3>
+            <span id="displayDeadline" style="font-size:0.75rem; font-weight:700; color:var(--accent);"></span>
+        </div>
+        
+        <input id="stageTitle" placeholder="Next physical step...">
         <div class="row">
-            <div style="flex:0 0 40%"><input type="number" id="stageMins" placeholder="Mins"></div>
+            <div class="narrow"><input type="number" id="stageMins" placeholder="Mins"></div>
             <div><input type="date" id="stageDate"></div>
         </div>
-        <button onclick="addToStaging()" style="background:var(--success)">Add Action</button>
-        <div id="stagedList" style="margin:10px 0"></div>
+        <button onclick="addToStaging()" style="background:var(--success); color:white; width:100%; height:45px; border-radius:12px; font-weight:700; margin-bottom:15px;">+ Add to Sequence</button>
+        
+        <div id="stagedList" style="margin-bottom:20px; border-top:1px solid #dbeafe; padding-top:10px;"></div>
+        
         <div class="row">
-            <button onclick="finalisePlanning()" style="flex:2">Commit</button>
-            <button onclick="cancelPlanning()" style="background:#64748b; flex:1">Back</button>
+            <button onclick="finalisePlanning()" class="submit-btn" style="flex:2">Commit to Schedule</button>
+            <button onclick="cancelPlanning()" style="background:#64748b; color:white; flex:1; border-radius:16px;">Cancel</button>
         </div>
     </div>
 
@@ -80,9 +203,15 @@
 </div>
 
 <script>
-    const CONFIG = { URL: "https://wuhklqulwhioiynoadtj.supabase.co", KEY: "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx" };
+    // INITIALIZATION
+    const CONFIG = { 
+        URL: "https://wuhklqulwhioiynoadtj.supabase.co", 
+        KEY: "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx" 
+    };
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
-    let masterTasks = [], stagingTasks = [], settings = { weekday_limit: 45, weekend_limit: 90 };
+    
+    let masterTasks = [], stagingTasks = [], activeGoal = null;
+    let settings = { weekday_limit: 45, weekend_limit: 90 };
 
     const formatDate = (dStr) => { if(!dStr) return ""; const [y,m,d] = dStr.split("-"); return `${d}/${m}/${y.slice(-2)}`; };
 
@@ -93,6 +222,7 @@
         refresh();
     };
 
+    // DATA FETCHING
     async function loadSettings() {
         const { data } = await client.from('user_settings').select('*').eq('id', 'default_user').single();
         if (data) settings = data;
@@ -101,35 +231,40 @@
     async function refresh() {
         const { data: active } = await client.from('subtasks').select('*').eq('completed', false);
         masterTasks = active || [];
+        // Sort by Date, then by Importance
         masterTasks.sort((a,b) => new Date(a.due_date) - new Date(b.due_date) || b.importance - a.importance);
         renderDashboard();
         renderMaster();
     }
 
+    // RENDER FUNCTIONS
     function renderDashboard() {
-        // 1. Render Week Capacity Bar
-        const bar = document.getElementById('weekBar'); bar.innerHTML = '';
+        const bar = document.getElementById('weekBar'); 
+        bar.innerHTML = '';
         const today = new Date();
+        
         for(let i=0; i<7; i++) {
-            const d = new Date(today); d.setDate(today.getDate() + i);
+            const d = new Date(today); 
+            d.setDate(today.getDate() + i);
             const dStr = d.toISOString().split('T')[0];
-            const load = masterTasks.filter(t => t.due_date === dStr).reduce((s, t) => s + t.duration, 0);
+            const load = masterTasks.filter(t => t.due_date === dStr).reduce((s, t) => s + parseInt(t.duration), 0);
             const limit = (d.getDay() === 0 || d.getDay() === 6) ? settings.weekend_limit : settings.weekday_limit;
-            const perc = Math.min((load / limit) * 100, 100);
-            const color = load > limit ? 'var(--error)' : 'var(--success)';
+            
+            const color = load > limit ? 'var(--error)' : (load > 0 ? 'var(--success)' : 'rgba(255,255,255,0.2)');
+            const opacity = load > 0 ? 1 : 0.2;
             
             bar.innerHTML += `
                 <div class="day-cap">
-                    <div style="font-size:0.6rem; opacity:0.6">${['S','M','T','W','T','F','S'][d.getDay()]}</div>
-                    <div class="cap-dot" style="background:${color}; opacity:${0.3 + (perc/150)}"></div>
+                    <div style="font-size:0.6rem; opacity:0.6; font-weight:700">${['S','M','T','W','T','F','S'][d.getDay()]}</div>
+                    <div class="cap-dot" style="background:${color}; opacity:${opacity}; box-shadow: ${load > limit ? '0 0 8px var(--error)' : 'none'}"></div>
                 </div>`;
         }
 
-        // 2. Render Top 3 Priorities
-        const deck = document.getElementById('priorityDeck'); deck.innerHTML = '';
+        const deck = document.getElementById('priorityDeck'); 
+        deck.innerHTML = '';
         const top3 = masterTasks.slice(0, 3);
         
-        if(top3.length === 0) deck.innerHTML = '<div style="opacity:0.5; font-size:0.8rem">No pending actions.</div>';
+        if(top3.length === 0) deck.innerHTML = '<div style="opacity:0.4; font-size:0.8rem; text-align:center; padding:20px;">No active priorities. Add a goal below.</div>';
 
         top3.forEach(t => {
             const div = document.createElement('div');
@@ -139,77 +274,129 @@
                     <span class="prio-title">${t.title}</span>
                     <span class="prio-meta">${formatDate(t.due_date)} • ${t.duration}m</span>
                 </div>
-                <div>
+                <div class="prio-actions">
                     <button class="btn-push" onclick='pushTask("${t.id}", "${t.due_date}", "${t.goal_deadline}")'>Delay</button>
-                    <button class="btn-done" onclick='completeTask("${t.id}")'>✓</button>
+                    <button class="btn-done" onclick='completeTask("${t.id}")'>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </button>
                 </div>
             `;
             deck.appendChild(div);
         });
     }
 
+    function renderMaster() {
+        const inv = document.getElementById('masterInventory'); 
+        inv.innerHTML = '';
+        // Rest of the tasks excluding top 3
+        masterTasks.slice(3).forEach(t => {
+            const d = document.createElement('div');
+            d.className = 'inventory-item';
+            d.innerHTML = `
+                <div class="imp-badge">${t.importance}</div>
+                <div style="flex:1; overflow:hidden;">
+                    <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t.title}</div>
+                    <small style="color:#64748b">${formatDate(t.due_date)} • ${t.duration}m</small>
+                </div>
+                <button class="btn-done" style="width:34px; height:34px; border-radius:8px; background:#f1f5f9; color:#64748b" onclick='completeTask("${t.id}")'>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>`;
+            inv.appendChild(d);
+        });
+    }
+
+    // CORE LOGIC: DELAY / COMPLETE
     async function pushTask(id, currentStr, deadlineStr) {
         const current = new Date(currentStr);
-        const tomorrow = new Date(current); tomorrow.setDate(current.getDate() + 1);
+        const tomorrow = new Date(current); 
+        tomorrow.setDate(current.getDate() + 1);
         const tomStr = tomorrow.toISOString().split('T')[0];
 
-        // CHECK 1: Is tomorrow past the project deadline?
         if (deadlineStr && tomStr > deadlineStr) {
-            return alert(`🚫 Cannot delay! Tomorrow is past the final project deadline (${formatDate(deadlineStr)}).`);
+            return alert(`🚫 Hard Block: This task is linked to a goal ending ${formatDate(deadlineStr)}. You cannot push it further.`);
         }
 
-        // CHECK 2: Is tomorrow already at capacity?
-        const load = masterTasks.filter(t => t.due_date === tomStr).reduce((s, t) => s + t.duration, 0);
+        const load = masterTasks.filter(t => t.due_date === tomStr).reduce((s, t) => s + parseInt(t.duration), 0);
         const dayNum = tomorrow.getDay();
         const limit = (dayNum === 0 || dayNum === 6) ? settings.weekend_limit : settings.weekday_limit;
         
         if (load >= limit) {
-            if (!confirm(`⚠️ Tomorrow is already at capacity (${load}/${limit}m). Delay anyway?`)) return;
+            if (!confirm(`⚠️ Tomorrow is at capacity (${load}/${limit}m). Delay anyway?`)) return;
         }
 
         await client.from('subtasks').update({ due_date: tomStr }).eq('id', id);
         refresh();
     }
 
-    function renderMaster() {
-        const inv = document.getElementById('masterInventory'); inv.innerHTML = '';
-        masterTasks.slice(3).forEach(t => {
-            const d = document.createElement('div');
-            d.className = 'inventory-item';
-            d.innerHTML = `<div class="imp-num">${t.importance}</div>
-                <div style="flex:1"><b>${t.title}</b><br><small>${formatDate(t.due_date)} • ${t.duration}m</small></div>
-                <button class="btn-done" style="width:30px; height:30px; font-size:0.7rem" onclick='completeTask("${t.id}")'>✓</button>`;
-            inv.appendChild(d);
-        });
+    async function completeTask(id) {
+        await client.from('subtasks').update({ completed: true }).eq('id', id);
+        refresh();
     }
 
-    // Capture Logic
+    // PLANNING WORKFLOW
     function lockGoal() {
-        const g = document.getElementById('mainGoal').value;
-        const d = document.getElementById('goalDate').value;
-        if(!g || !d) return alert("Goal & Date required");
-        activeGoal = { goal: g, date: d, imp: document.getElementById('mainImp').value };
-        document.getElementById('displayGoal').innerText = g;
-        document.getElementById('stageDate').value = d;
+        const goal = document.getElementById('mainGoal').value;
+        const date = document.getElementById('goalDate').value;
+        if(!goal || !date) return alert("Enter Goal Name & Deadline");
+        
+        activeGoal = { goal, date, imp: document.getElementById('mainImp').value };
+        document.getElementById('displayGoal').innerText = goal;
+        document.getElementById('displayDeadline').innerText = "Due: " + formatDate(date);
+        document.getElementById('stageDate').value = date;
+        
         document.getElementById('goalCapture').classList.add('hidden');
         document.getElementById('planningArea').classList.remove('hidden');
     }
 
     function addToStaging() {
-        stagingTasks.push({ title: document.getElementById('stageTitle').value, duration: document.getElementById('stageMins').value, due_date: document.getElementById('stageDate').value });
+        const title = document.getElementById('stageTitle').value;
+        const mins = document.getElementById('stageMins').value;
+        const date = document.getElementById('stageDate').value;
+        
+        if(!title || !mins || !date) return alert("Fill all action details");
+        
+        stagingTasks.push({ title, duration: mins, due_date: date });
         document.getElementById('stageTitle').value = '';
-        document.getElementById('stagedList').innerHTML = stagingTasks.map(t => `<div style="font-size:0.8rem; margin-bottom:4px;">• ${t.title}</div>`).join('');
+        document.getElementById('stagedList').innerHTML = stagingTasks.map(t => 
+            `<div style="font-size:0.85rem; padding:8px; background:white; border-radius:8px; margin-bottom:6px; border:1px solid #dbeafe;">
+                <b>${t.title}</b> <span style="float:right; opacity:0.6">${t.duration}m</span>
+            </div>`).join('');
     }
 
     async function finalisePlanning() {
-        const toInsert = stagingTasks.map(t => ({ title: `${activeGoal.goal}: ${t.title}`, duration: t.duration, due_date: t.due_date, importance: activeGoal.imp, goal_deadline: activeGoal.date }));
+        if(stagingTasks.length === 0) return alert("Add at least one action.");
+        
+        const toInsert = stagingTasks.map(t => ({
+            title: `${activeGoal.goal}: ${t.title}`,
+            duration: parseInt(t.duration),
+            due_date: t.due_date,
+            importance: parseInt(activeGoal.imp),
+            goal_deadline: activeGoal.date
+        }));
+
         await client.from('subtasks').insert(toInsert);
         cancelPlanning();
         refresh();
     }
 
-    function cancelPlanning() { document.getElementById('planningArea').classList.add('hidden'); document.getElementById('goalCapture').classList.remove('hidden'); stagingTasks = []; }
-    async function completeTask(id) { await client.from('subtasks').update({completed: true}).eq('id', id); refresh(); }
+    function cancelPlanning() {
+        document.getElementById('planningArea').classList.add('hidden');
+        document.getElementById('goalCapture').classList.remove('hidden');
+        stagingTasks = [];
+        document.getElementById('stagedList').innerHTML = '';
+        document.getElementById('mainGoal').value = '';
+    }
+
+    function toggleSettings() {
+        const newWeek = prompt("Weekday Limit (mins):", settings.weekday_limit);
+        const newEnd = prompt("Weekend Limit (mins):", settings.weekend_limit);
+        if(newWeek && newEnd) {
+            settings.weekday_limit = parseInt(newWeek);
+            settings.weekend_limit = parseInt(newEnd);
+            client.from('user_settings').upsert({ id: 'default_user', ...settings }).then(() => refresh());
+        }
+    }
 </script>
+
 </body>
 </html>
