@@ -229,13 +229,27 @@
         const { error } = await client.from('subtasks')
             .update({ completed: false, updated_at: new Date().toISOString() })
             .eq('id', id);
+        if (error) console.error("Undo Error:", error);
+        refresh();
+    }
 
-        if (error) {
-            console.error("Undo Error:", error);
-            alert("Could not undo task.");
+    async function deleteTask(id) {
+        const task = masterTasks.find(t => t.id == id);
+        if (!task) return;
+
+        let deleteOption = "One";
+        if (task.project_id) {
+            deleteOption = confirm("Delete ENTIRE project/recurrence? (Cancel for just this task)") ? "All" : "One";
         } else {
-            refresh();
+            if (!confirm("Delete this task?")) return;
         }
+
+        if (deleteOption === "All") {
+            await client.from('subtasks').delete().eq('project_id', task.project_id);
+        } else {
+            await client.from('subtasks').delete().eq('id', id);
+        }
+        refresh();
     }
 
     async function handleRecurrence(task) {
@@ -262,18 +276,25 @@
 
     async function editTask(id) {
         const t = masterTasks.find(task => task.id == id);
-        const action = prompt("1: Edit Title/Mins\n2: Edit Goal Deadline", "1");
-        if (action === "1") {
-            const newTitle = prompt("Edit Title:", t.title);
-            const newDuration = parseInt(prompt("Edit Duration (15 max):", t.duration));
-            if (newTitle && newDuration <= 15) await client.from('subtasks').update({ title: newTitle, duration: newDuration }).eq('id', id);
-        } else if (action === "2") {
-            const newDead = prompt("New Goal Deadline (YYYY-MM-DD):", t.goal_deadline);
-            if (newDead) {
-                const projectName = t.title.split(":")[0];
-                await client.from('subtasks').update({ goal_deadline: newDead }).ilike('title', `${projectName}%`);
-            }
-        }
+        
+        const newTitle = prompt("Update Task Title:", t.title);
+        if (newTitle === null) return; // User cancelled
+
+        const newMins = prompt("Update Minutes (max 15):", t.duration);
+        if (newMins === null) return;
+
+        const newDate = prompt("Update Due Date (YYYY-MM-DD):", t.due_date);
+        if (newDate === null) return;
+
+        const duration = parseInt(newMins);
+        if (duration > 15) return alert("Task must be 15 mins or less.");
+
+        await client.from('subtasks').update({ 
+            title: newTitle, 
+            duration: duration, 
+            due_date: newDate 
+        }).eq('id', id);
+
         refresh();
     }
 
@@ -310,7 +331,14 @@
     function renderToDo() {
         const list = document.getElementById('masterToDo'); list.innerHTML = '';
         masterTasks.forEach(t => {
-            list.innerHTML += `<div class="todo-item"><div style="font-weight:900; color:var(--accent); font-size:0.8rem; width:20px;">${t.importance}</div><div style="flex:1;"><b>${t.title}</b><br><small>${formatDate(t.due_date)} • ${t.duration}m</small></div><button class="btn-edit" onclick='editTask("${t.id}")'>✎</button><button class="btn-done" style="background:#f1f5f9; color:#64748b" onclick='completeTask("${t.id}")'>✓</button></div>`;
+            list.innerHTML += `
+                <div class="todo-item">
+                    <div style="font-weight:900; color:var(--accent); font-size:0.8rem; width:20px;">${t.importance}</div>
+                    <div style="flex:1;"><b>${t.title}</b><br><small>${formatDate(t.due_date)} • ${t.duration}m</small></div>
+                    <button class="btn-edit" style="color:#ef4444;" onclick='deleteTask("${t.id}")'>✕</button>
+                    <button class="btn-edit" onclick='editTask("${t.id}")'>✎</button>
+                    <button class="btn-done" style="background:#f1f5f9; color:#64748b" onclick='completeTask("${t.id}")'>✓</button>
+                </div>`;
         });
     }
 
