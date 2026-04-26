@@ -38,13 +38,13 @@
         
         /* Staged Planning List */
         .staged-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: white; border-radius: 12px; margin-bottom: 8px; border: 1px solid #dbeafe; font-size: 0.85rem; }
-        .btn-mini-edit { background: #f1f5f9; color: #475569; border: none; padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; cursor: pointer; }
+        .btn-mini-edit { background: #f1f5f9; color: #475569; border: none; padding: 6px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 800; cursor: pointer; }
 
         /* ToDo List Items */
         .todo-item { display: flex; align-items: center; padding: 16px; background: white; border-radius: 18px; margin-bottom: 10px; border: 1px solid var(--border); gap: 12px; }
         .imp-badge { font-weight: 900; color: var(--accent); font-size: 0.9rem; min-width: 24px; text-align: center; }
         
-        /* Archived Section */
+        /* Archived Items */
         .archived-item { opacity: 0.6; background: transparent; border: 1px dashed var(--border); }
         .btn-undo { background: #f1f5f9; color: var(--accent); border: none; padding: 6px 10px; border-radius: 8px; font-size: 0.7rem; font-weight: 800; cursor: pointer; }
         
@@ -131,6 +131,7 @@
     }
 
     function renderDashboard() {
+        // Week Bar
         const bar = document.getElementById('weekBar'); bar.innerHTML = '';
         const today = new Date();
         for(let i=0; i<7; i++) {
@@ -142,6 +143,7 @@
             bar.innerHTML += `<div class="day-cap"><div style="font-size:0.6rem; opacity:0.6;">${['S','M','T','W','T','F','S'][d.getDay()]}</div><div class="cap-dot" style="background:${color};"></div></div>`;
         }
 
+        // Spotlight
         const deck = document.getElementById('priorityDeck'); deck.innerHTML = '';
         masterTasks.slice(0, 3).forEach(t => {
             const div = document.createElement('div');
@@ -158,6 +160,7 @@
 
     function renderToDo() {
         const list = document.getElementById('masterToDo'); list.innerHTML = '';
+        // Show all active items
         masterTasks.forEach(t => {
             const d = document.createElement('div');
             d.className = 'todo-item';
@@ -173,24 +176,15 @@
         tasks.forEach(t => {
             const d = document.createElement('div');
             d.className = 'todo-item archived-item';
-            d.innerHTML = `
-                <div style="flex:1; overflow:hidden;"><strike>${t.title}</strike></div>
+            d.innerHTML = `<div style="flex:1; overflow:hidden;"><strike>${t.title}</strike></div>
                 <button class="btn-undo" onclick='undoComplete("${t.id}")'>UNDO</button>`;
             list.appendChild(d);
         });
     }
 
-    // Task Functions
-    async function undoComplete(id) {
-        await client.from('subtasks').update({ completed: false }).eq('id', id);
-        refresh();
-    }
-
-    async function completeTask(id) {
-        await client.from('subtasks').update({ completed: true, updated_at: new Date().toISOString() }).eq('id', id);
-        refresh();
-    }
-
+    // Core Logic
+    async function undoComplete(id) { await client.from('subtasks').update({ completed: false }).eq('id', id); refresh(); }
+    async function completeTask(id) { await client.from('subtasks').update({ completed: true, updated_at: new Date().toISOString() }).eq('id', id); refresh(); }
     async function pushTask(id, currentStr, deadlineStr) {
         const tom = new Date(currentStr); tom.setDate(tom.getDate() + 1);
         const tomStr = tom.toISOString().split('T')[0];
@@ -203,7 +197,7 @@
     function lockGoal() {
         const goal = document.getElementById('mainGoal').value;
         const date = document.getElementById('goalDate').value;
-        if(!goal || !date) return alert("Goal Name & Deadline required");
+        if(!goal || !date) return alert("Missing goal details");
         activeGoal = { goal, date, imp: document.getElementById('mainImp').value };
         document.getElementById('displayGoal').innerText = goal;
         document.getElementById('stageDate').value = date;
@@ -215,7 +209,7 @@
         const title = document.getElementById('stageTitle').value;
         const mins = document.getElementById('stageMins').value;
         const date = document.getElementById('stageDate').value;
-        if(!title || !mins || !date) return alert("Missing action info");
+        if(!title || !mins || !date) return alert("Fill all fields");
 
         const action = { title, duration: mins, due_date: date };
         if(currentEditIdx !== null) {
@@ -225,7 +219,6 @@
         } else {
             stagingTasks.push(action);
         }
-        
         document.getElementById('stageTitle').value = '';
         renderStaging();
     }
@@ -248,7 +241,7 @@
     }
 
     async function finalisePlanning() {
-        if(stagingTasks.length === 0) return alert("Add actions first");
+        if(stagingTasks.length === 0) return alert("No actions added");
         const toInsert = stagingTasks.map(t => ({ 
             title: `${activeGoal.goal}: ${t.title}`, 
             duration: parseInt(t.duration), 
