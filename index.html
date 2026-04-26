@@ -71,7 +71,7 @@
         <h3 id="displayGoal" style="margin:0 0 15px 0; font-size:1rem;"></h3>
         <input id="stageTitle" placeholder="Action Title">
         <div style="display:flex; gap:12px;">
-            <div style="flex:0 0 35%;"><label style="font-size:0.7rem;">Mins (Min 15)</label><input type="number" id="stageMins" min="15" value="15"></div>
+            <div style="flex:0 0 35%;"><label style="font-size:0.7rem;">Mins (15 max)</label><input type="number" id="stageMins" max="15" value="15"></div>
             <div><label style="font-size:0.7rem;">Action Date</label><input type="date" id="stageDate"></div>
         </div>
         <button id="addStagingBtn" onclick="addToStaging()" style="background:var(--success); color:white; width:100%; height:48px; border-radius:14px; font-weight:700; margin-bottom:15px; border:none; cursor:pointer;">+ Add to Sequence</button>
@@ -139,14 +139,14 @@
         
         if (action === "1") {
             const newTitle = prompt("Edit Title:", t.title);
-            const newDuration = prompt("Edit Duration (min 15):", t.duration);
-            if (newTitle && newDuration >= 15) {
-                await client.from('subtasks').update({ title: newTitle, duration: parseInt(newDuration), updated_at: new Date().toISOString() }).eq('id', id);
+            const newDuration = parseInt(prompt("Edit Duration (15 max):", t.duration));
+            if (newTitle) {
+                if (newDuration > 15) return alert("break task down smaller (15min max)");
+                await client.from('subtasks').update({ title: newTitle, duration: newDuration, updated_at: new Date().toISOString() }).eq('id', id);
             }
         } else if (action === "2") {
             const newDead = prompt("New Goal Deadline (YYYY-MM-DD):", t.goal_deadline);
             if (newDead) {
-                // Update all tasks sharing the same parent project name
                 const projectName = t.title.split(":")[0];
                 await client.from('subtasks').update({ goal_deadline: newDead }).ilike('title', `${projectName}%`);
             }
@@ -212,7 +212,7 @@
         const date = document.getElementById('stageDate').value;
         
         if(!title || isNaN(mins) || !date) return alert("Missing info");
-        if(mins < 15) return alert("Minimum time is 15 minutes.");
+        if(mins > 15) return alert("break task down smaller (15min max)");
         if(date > activeGoal.date) return alert(`Action date cannot be later than project deadline (${formatDate(activeGoal.date)})`);
 
         stagingTasks.push({ title, duration: mins, due_date: date });
@@ -234,7 +234,6 @@
     function cancelPlanning() {
         document.getElementById('planningArea').classList.add('hidden');
         document.getElementById('goalCapture').classList.remove('hidden');
-        // Resetting the form
         document.getElementById('mainGoal').value = '';
         document.getElementById('goalDate').value = '';
         document.getElementById('stageTitle').value = '';
