@@ -14,7 +14,6 @@
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 12px; }
         .container { max-width: 500px; margin: auto; padding-bottom: 100px; }
 
-        /* Dashboard */
         .dashboard { background: var(--primary); color: white; padding: 24px 20px; border-radius: 32px; margin-bottom: 25px; box-shadow: 0 20px 40px -12px rgba(15, 23, 42, 0.3); }
         .week-bar { display: flex; gap: 6px; margin-bottom: 24px; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 16px; }
         .day-cap { flex: 1; text-align: center; }
@@ -26,13 +25,11 @@
         .prio-title { font-weight: 700; font-size: 0.95rem; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .prio-meta { font-size: 0.75rem; opacity: 0.6; }
 
-        /* Buttons */
         .btn-done { background: var(--accent); color: white; width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; border: none; }
         .btn-push { background: rgba(255,255,255,0.1); color: white; padding: 0 14px; height: 42px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
         .btn-edit { background: none; border: none; color: #64748b; cursor: pointer; padding: 8px; }
         .btn-bulk { background: rgba(255,255,255,0.15); color: white; border: none; font-size: 0.65rem; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-weight: 700; }
 
-        /* UI Components */
         .card { background: var(--card); padding: 20px; border-radius: 24px; border: 1px solid var(--border); margin-bottom: 20px; }
         .section-title { font-size: 0.7rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1.5px; margin: 25px 0 12px; display: block; }
         input, select { width: 100%; height: 50px; padding: 0 16px; border-radius: 14px; border: 1px solid #cbd5e1; font-size: 16px; margin-bottom: 12px; outline: none; }
@@ -41,6 +38,7 @@
         .todo-item { display: flex; align-items: center; padding: 16px; background: white; border-radius: 18px; margin-bottom: 10px; border: 1px solid var(--border); gap: 12px; }
         .completed-item { opacity: 0.6; background: transparent; border: 1px dashed var(--border); }
         .hidden { display: none; }
+        .staged-item { background: #f8fafc; padding: 10px; border-radius: 12px; margin-bottom: 5px; font-size: 0.8rem; border: 1px solid #e2e8f0; }
     </style>
 </head>
 <body>
@@ -73,7 +71,7 @@
         <h3 id="displayGoal" style="margin:0 0 15px 0; font-size:1rem;"></h3>
         <input id="stageTitle" placeholder="Action Title">
         <div style="display:flex; gap:12px;">
-            <div style="flex:0 0 35%;"><label style="font-size:0.7rem;">Mins</label><input type="number" id="stageMins"></div>
+            <div style="flex:0 0 35%;"><label style="font-size:0.7rem;">Mins (Min 15)</label><input type="number" id="stageMins" min="15" value="15"></div>
             <div><label style="font-size:0.7rem;">Action Date</label><input type="date" id="stageDate"></div>
         </div>
         <button id="addStagingBtn" onclick="addToStaging()" style="background:var(--success); color:white; width:100%; height:48px; border-radius:14px; font-weight:700; margin-bottom:15px; border:none; cursor:pointer;">+ Add to Sequence</button>
@@ -94,7 +92,7 @@
 <script>
     const CONFIG = { URL: "https://wuhklqulwhioiynoadtj.supabase.co", KEY: "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx" };
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
-    let masterTasks = [], stagingTasks = [], settings = { weekday_limit: 45, weekend_limit: 90 };
+    let masterTasks = [], stagingTasks = [], activeGoal = null, settings = { weekday_limit: 45, weekend_limit: 90 };
 
     const formatDate = (dStr) => { if(!dStr) return ""; const [y,m,d] = dStr.split("-"); return `${d}/${m}/${y.slice(-2)}`; };
 
@@ -120,18 +118,14 @@
         renderArchived(completed || []);
     }
 
-    // --- Bulk Action ---
     async function pushAllToday() {
         const todayStr = new Date().toISOString().split('T')[0];
         const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
         const tomStr = tomorrow.toISOString().split('T')[0];
-
         const todayTasks = masterTasks.filter(t => t.due_date === todayStr);
         if (todayTasks.length === 0) return alert("Nothing scheduled for today!");
-
         if (confirm(`Move ${todayTasks.length} tasks to tomorrow?`)) {
             for (let t of todayTasks) {
-                // Safety check for deadlines
                 if (t.goal_deadline && tomStr > t.goal_deadline) continue; 
                 await client.from('subtasks').update({ due_date: tomStr }).eq('id', t.id);
             }
@@ -139,20 +133,25 @@
         }
     }
 
-    // --- Task Editing ---
     async function editTask(id) {
         const t = masterTasks.find(task => task.id == id);
-        const newTitle = prompt("Edit Title:", t.title);
-        const newDuration = prompt("Edit Duration (mins):", t.duration);
+        const action = prompt("Type '1' to edit Title/Mins\nType '2' to edit Goal Deadline", "1");
         
-        if (newTitle && newDuration) {
-            await client.from('subtasks').update({ 
-                title: newTitle, 
-                duration: parseInt(newDuration),
-                updated_at: new Date().toISOString()
-            }).eq('id', id);
-            refresh();
+        if (action === "1") {
+            const newTitle = prompt("Edit Title:", t.title);
+            const newDuration = prompt("Edit Duration (min 15):", t.duration);
+            if (newTitle && newDuration >= 15) {
+                await client.from('subtasks').update({ title: newTitle, duration: parseInt(newDuration), updated_at: new Date().toISOString() }).eq('id', id);
+            }
+        } else if (action === "2") {
+            const newDead = prompt("New Goal Deadline (YYYY-MM-DD):", t.goal_deadline);
+            if (newDead) {
+                // Update all tasks sharing the same parent project name
+                const projectName = t.title.split(":")[0];
+                await client.from('subtasks').update({ goal_deadline: newDead }).ilike('title', `${projectName}%`);
+            }
         }
+        refresh();
     }
 
     function renderDashboard() {
@@ -166,42 +165,23 @@
             const color = load > limit ? 'var(--error)' : (load > 0 ? 'var(--success)' : 'rgba(255,255,255,0.1)');
             bar.innerHTML += `<div class="day-cap"><div style="font-size:0.6rem; opacity:0.6;">${['S','M','T','W','T','F','S'][d.getDay()]}</div><div class="cap-dot" style="background:${color};"></div></div>`;
         }
-
         const deck = document.getElementById('priorityDeck'); deck.innerHTML = '';
         masterTasks.slice(0, 3).forEach(t => {
-            const div = document.createElement('div');
-            div.className = 'prio-card';
-            div.innerHTML = `
-                <div class="prio-info"><span class="prio-title">${t.title}</span><span class="prio-meta">${formatDate(t.due_date)} • ${t.duration}m</span></div>
-                <div style="display:flex; gap:6px;">
-                    <button class="btn-push" onclick='pushTask("${t.id}", "${t.due_date}", "${t.goal_deadline}")'>+1d</button>
-                    <button class="btn-done" onclick='completeTask("${t.id}")'><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
-                </div>`;
-            deck.appendChild(div);
+            deck.innerHTML += `<div class="prio-card"><div class="prio-info"><span class="prio-title">${t.title}</span><span class="prio-meta">${formatDate(t.due_date)} • ${t.duration}m</span></div><div style="display:flex; gap:6px;"><button class="btn-push" onclick='pushTask("${t.id}", "${t.due_date}", "${t.goal_deadline}")'>+1d</button><button class="btn-done" onclick='completeTask("${t.id}")'>✓</button></div></div>`;
         });
     }
 
     function renderToDo() {
         const list = document.getElementById('masterToDo'); list.innerHTML = '';
         masterTasks.forEach(t => {
-            const d = document.createElement('div');
-            d.className = 'todo-item';
-            d.innerHTML = `
-                <div style="font-weight:900; color:var(--accent); font-size:0.8rem; width:20px;">${t.importance}</div>
-                <div style="flex:1; overflow:hidden;"><b>${t.title}</b><br><small style="color:#64748b">${formatDate(t.due_date)} • ${t.duration}m</small></div>
-                <button class="btn-edit" onclick='editTask("${t.id}")'>✎</button>
-                <button class="btn-done" style="width:34px; height:34px; border-radius:8px; background:#f1f5f9; color:#64748b" onclick='completeTask("${t.id}")'><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></button>`;
-            list.appendChild(d);
+            list.innerHTML += `<div class="todo-item"><div style="font-weight:900; color:var(--accent); font-size:0.8rem; width:20px;">${t.importance}</div><div style="flex:1; overflow:hidden;"><b>${t.title}</b><br><small style="color:#64748b">${formatDate(t.due_date)} • ${t.duration}m</small></div><button class="btn-edit" onclick='editTask("${t.id}")'>✎</button><button class="btn-done" style="width:34px; height:34px; border-radius:8px; background:#f1f5f9; color:#64748b" onclick='completeTask("${t.id}")'>✓</button></div>`;
         });
     }
 
     function renderArchived(tasks) {
         const list = document.getElementById('archivedToDo'); list.innerHTML = '';
         tasks.forEach(t => {
-            const d = document.createElement('div');
-            d.className = 'todo-item completed-item';
-            d.innerHTML = `<div style="flex:1;"><strike>${t.title}</strike></div><button class="btn-push" style="color:var(--accent); background:none; font-size:0.7rem;" onclick='undoComplete("${t.id}")'>UNDO</button>`;
-            list.appendChild(d);
+            list.innerHTML += `<div class="todo-item completed-item"><div style="flex:1;"><strike>${t.title}</strike></div><button class="btn-push" style="color:var(--accent); background:none; font-size:0.7rem;" onclick='undoComplete("${t.id}")'>UNDO</button></div>`;
         });
     }
 
@@ -215,39 +195,54 @@
         refresh();
     }
     
-    // Planning Logic (Unchanged but included for completeness)
     function lockGoal() {
         const goal = document.getElementById('mainGoal').value;
         const date = document.getElementById('goalDate').value;
         if(!goal || !date) return alert("Goal Name & Deadline required");
         activeGoal = { goal, date, imp: document.getElementById('mainImp').value };
-        document.getElementById('displayGoal').innerText = goal;
+        document.getElementById('displayGoal').innerText = `Project: ${goal} (Ends: ${formatDate(date)})`;
         document.getElementById('stageDate').value = date;
         document.getElementById('goalCapture').classList.add('hidden');
         document.getElementById('planningArea').classList.remove('hidden');
     }
+
     function addToStaging() {
         const title = document.getElementById('stageTitle').value;
-        const mins = document.getElementById('stageMins').value;
+        const mins = parseInt(document.getElementById('stageMins').value);
         const date = document.getElementById('stageDate').value;
-        if(!title || !mins || !date) return alert("Missing info");
+        
+        if(!title || isNaN(mins) || !date) return alert("Missing info");
+        if(mins < 15) return alert("Minimum time is 15 minutes.");
+        if(date > activeGoal.date) return alert(`Action date cannot be later than project deadline (${formatDate(activeGoal.date)})`);
+
         stagingTasks.push({ title, duration: mins, due_date: date });
         document.getElementById('stageTitle').value = '';
         renderStaging();
     }
+
     function renderStaging() {
-        document.getElementById('stagedList').innerHTML = stagingTasks.map((t, i) => `<div class="staged-item"><div><b>${t.title}</b><br><small>${formatDate(t.due_date)} • ${t.duration}m</small></div></div>`).join('');
+        document.getElementById('stagedList').innerHTML = stagingTasks.map((t, i) => `<div class="staged-item"><b>${t.title}</b> - ${t.duration}m on ${formatDate(t.due_date)}</div>`).join('');
     }
+
     async function finalisePlanning() {
         const toInsert = stagingTasks.map(t => ({ title: `${activeGoal.goal}: ${t.title}`, duration: parseInt(t.duration), due_date: t.due_date, importance: parseInt(activeGoal.imp), goal_deadline: activeGoal.date, updated_at: new Date().toISOString() }));
         await client.from('subtasks').insert(toInsert);
-        cancelPlanning(); refresh();
+        cancelPlanning(); 
+        refresh();
     }
+
     function cancelPlanning() {
         document.getElementById('planningArea').classList.add('hidden');
         document.getElementById('goalCapture').classList.remove('hidden');
+        // Resetting the form
+        document.getElementById('mainGoal').value = '';
+        document.getElementById('goalDate').value = '';
+        document.getElementById('stageTitle').value = '';
+        document.getElementById('stageMins').value = '15';
         stagingTasks = [];
+        document.getElementById('stagedList').innerHTML = '';
     }
+
     function toggleSettings() {
         const w = prompt("Weekday limit:", settings.weekday_limit);
         const e = prompt("Weekend limit:", settings.weekend_limit);
