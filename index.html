@@ -142,7 +142,6 @@
         const grid = document.getElementById('settingsGrid');
         ['mon','tue','wed','thu','fri','sat','sun'].forEach(d => grid.innerHTML += `<div><label style="font-size:0.6rem; font-weight:800; color:#64748b; text-transform:uppercase;">${d}</label><input type="number" id="set-${d}"></div>`);
         
-        // Initialize Drag and Drop for Staging
         new Sortable(document.getElementById('stagedList'), {
             animation: 150,
             onEnd: (evt) => {
@@ -170,7 +169,6 @@
         renderArchived(completed || []);
     }
 
-    /* --- Helper: Capacity Engine --- */
     function hasCapacity(dateStr, taskDuration, ignoreTaskId = null) {
         const d = new Date(dateStr);
         const days = ['sun','mon','tue','wed','thu','fri','sat'];
@@ -183,7 +181,6 @@
         return (currentLoad + taskDuration) <= limit;
     }
 
-    /* --- Planning & Staging --- */
     function lockGoal() {
         const goal = document.getElementById('mainGoal').value;
         const date = document.getElementById('goalDate').value;
@@ -234,7 +231,7 @@
         if (error) {
             alert("Error saving tasks: " + error.message);
         } else {
-            // Reset the project inputs for the next use
+            // BUG FIX: Reset project inputs
             document.getElementById('mainGoal').value = '';
             document.getElementById('goalDate').value = '';
             document.getElementById('recurRule').value = '';
@@ -245,38 +242,20 @@
         }
     }
 
-    /* --- Core Actions & Capacity Fixes --- */
-   async function pushTask(id) {
-    const t = masterTasks.find(task => task.id == id);
-    if (!t) return;
+    async function pushTask(id) {
+        const t = masterTasks.find(task => task.id == id);
+        if (!t) return;
+        const currentDueDate = new Date(t.due_date);
+        const targetDate = new Date(currentDueDate);
+        targetDate.setDate(targetDate.getDate() + 1);
+        const targetDateStr = targetDate.toISOString().split('T')[0];
 
-    // Calculate the target date (one day after the task's current due_date)
-    const currentDueDate = new Date(t.due_date);
-    const targetDate = new Date(currentDueDate);
-    targetDate.setDate(targetDate.getDate() + 1);
-    const targetDateStr = targetDate.toISOString().split('T')[0];
+        if (t.goal_deadline && targetDateStr > t.goal_deadline) return alert("Cannot push: Past project deadline!");
+        if (!hasCapacity(targetDateStr, t.duration)) return alert(`${formatDate(targetDateStr)} is already at capacity!`);
 
-    // 1. Deadline Check
-    if (t.goal_deadline && targetDateStr > t.goal_deadline) {
-        return alert("Cannot push: Past project deadline!");
-    }
-
-    // 2. Capacity Check for the SPECIFIC target date
-    if (!hasCapacity(targetDateStr, t.duration)) {
-        return alert(`${formatDate(targetDateStr)} is already at capacity!`);
-    }
-
-    // 3. Execute the move
-    const { error } = await client.from('subtasks')
-        .update({ due_date: targetDateStr, updated_at: new Date().toISOString() })
-        .eq('id', id);
-
-    if (error) {
-        console.error("Push Error:", error);
-    } else {
+        await client.from('subtasks').update({ due_date: targetDateStr, updated_at: new Date().toISOString() }).eq('id', id);
         refresh();
     }
-}
 
     async function pushAllToday() {
         const todayStr = new Date().toISOString().split('T')[0];
@@ -288,7 +267,7 @@
         for (let t of tasks) {
             if ((!t.goal_deadline || tomStr <= t.goal_deadline) && hasCapacity(tomStr, t.duration)) {
                 await client.from('subtasks').update({ due_date: tomStr }).eq('id', t.id);
-                t.due_date = tomStr; // Update local for capacity loop
+                t.due_date = tomStr;
                 count++;
             }
         }
@@ -327,14 +306,11 @@
         refresh();
     }
 
-async function editTask(id) {
+    async function editTask(id) {
         const t = masterTasks.find(task => task.id == id);
         if (!t) return;
-
-        // Construct the menu options dynamically
         let menu = "1: Edit Title/Mins/Date";
         if (t.recurrence_rule) menu += "\n2: Change Recurrence Frequency";
-        
         const action = prompt(menu, "1");
 
         if (action === "1") {
@@ -345,26 +321,14 @@ async function editTask(id) {
             if (newTitle && newMins && newDate) {
                 const duration = parseInt(newMins);
                 if (duration > 15) return alert("Task must be 15 mins or less.");
-                
-                // Capacity check for the new date/duration
-                // We ignore the current task's ID so we don't count its old duration against itself
-                if (!hasCapacity(newDate, duration, t.id)) {
-                    return alert("Target date is at capacity!");
-                }
+                if (!hasCapacity(newDate, duration, t.id)) return alert("Target date is at capacity!");
 
-                await client.from('subtasks').update({ 
-                    title: newTitle, 
-                    duration: duration, 
-                    due_date: newDate 
-                }).eq('id', id);
+                await client.from('subtasks').update({ title: newTitle, duration: duration, due_date: newDate }).eq('id', id);
             }
-        } 
-        else if (action === "2" && t.recurrence_rule) {
-            const newRule = prompt("New Frequency (Daily, Weekly, Fortnightly, Monthly, Quarterly, Annually):", t.recurrence_rule);
+        } else if (action === "2" && t.recurrence_rule) {
+            const newRule = prompt("New Frequency:", t.recurrence_rule);
             const valid = ['Daily', 'Weekly', 'Fortnightly', 'Monthly', 'Quarterly', 'Bi-annually', 'Annually'];
-            
             if (newRule && valid.includes(newRule)) {
-                // Updates all active tasks in this project so the next cycle inherits the change
                 await client.from('subtasks').update({ recurrence_rule: newRule }).eq('project_id', t.project_id);
             }
         }
@@ -376,7 +340,6 @@ async function editTask(id) {
         refresh();
     }
 
-    /* --- Rendering --- */
     function renderDashboard() {
         const bar = document.getElementById('weekBar'); bar.innerHTML = '';
         for(let i=0; i<7; i++) {
@@ -394,29 +357,23 @@ async function editTask(id) {
     }
 
     function renderToDo() {
-    const list = document.getElementById('masterToDo'); 
-    list.innerHTML = '';
-    
-    masterTasks.forEach(t => {
-        list.innerHTML += `
-            <div class="todo-item">
-                <div style="font-weight:900; color:var(--accent); width:20px;">${t.importance}</div>
-                
-                <div style="flex:1;">
-                    <b>${t.title}</b><br>
-                    <small>${formatDate(t.due_date)} • ${t.duration}m</small>
-                </div>
-                
-                <div style="display:flex; gap:5px; align-items:center;">
-                    <button class="btn-edit" style="color:#ef4444" onclick='deleteTask("${t.id}")'>✕</button>
-                    
-                    <button class="btn-edit" onclick='editTask("${t.id}")'>✎</button>
-                    
-                    <button class="btn-done" onclick='completeTask("${t.id}")'>✓</button>
-                </div>
-            </div>`;
-    });
-}
+        const list = document.getElementById('masterToDo'); list.innerHTML = '';
+        masterTasks.forEach(t => {
+            list.innerHTML += `
+                <div class="todo-item">
+                    <div style="font-weight:900; color:var(--accent); width:20px;">${t.importance}</div>
+                    <div style="flex:1;">
+                        <b>${t.title}</b><br>
+                        <small>${formatDate(t.due_date)} • ${t.duration}m</small>
+                    </div>
+                    <div style="display:flex; gap:5px; align-items:center;">
+                        <button class="btn-edit" style="color:#ef4444" onclick='deleteTask("${t.id}")'>✕</button>
+                        <button class="btn-edit" onclick='editTask("${t.id}")'>✎</button>
+                        <button class="btn-done" onclick='completeTask("${t.id}")'>✓</button>
+                    </div>
+                </div>`;
+        });
+    }
 
     function renderArchived(tasks) {
         const list = document.getElementById('archivedToDo'); list.innerHTML = '';
@@ -425,21 +382,24 @@ async function editTask(id) {
         });
     }
 
-function toggleRecurrence() {
+    /* --- BUG FIX: Restoration of toggleRecurrence --- */
+    function toggleRecurrence() {
         document.getElementById('recurrencePicker').classList.toggle('hidden');
     }
     
     function toggleSettings() { document.getElementById('settingsOverlay').classList.toggle('hidden'); }
+    
     async function saveSettings() {
         const n = { id: 'default_user', timezone: document.getElementById('set-tz').value };
         ['mon','tue','wed','thu','fri','sat','sun'].forEach(d => n[`${d}_limit`] = parseInt(document.getElementById(`set-${d}`).value) || 0);
         await client.from('user_settings').upsert(n); settings = n; toggleSettings(); refresh();
     }
-  function cancelPlanning() {
+
+    function cancelPlanning() {
         document.getElementById('planningArea').classList.add('hidden');
         document.getElementById('goalCapture').classList.remove('hidden');
         
-        // Clear the staging inputs and list
+        // BUG FIX: Clear the staging inputs and list
         stagingTasks = []; 
         document.getElementById('stagedList').innerHTML = '';
         document.getElementById('stageTitle').value = '';
