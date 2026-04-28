@@ -378,11 +378,29 @@ async function editTask(id) {
     }
 
     function renderToDo() {
-        const list = document.getElementById('masterToDo'); list.innerHTML = '';
-        masterTasks.forEach(t => {
-            list.innerHTML += `<div class="todo-item"><div style="font-weight:900; color:var(--accent); width:20px;">${t.importance}</div><div style="flex:1;"><b>${t.title}</b><br><small>${formatDate(t.due_date)} • ${t.duration}m</small></div><button class="btn-edit" style="color:#ef4444" onclick='deleteTask("${t.id}")'>✕</button><button class="btn-done" onclick='completeTask("${t.id}")'>✓</button></div>`;
-        });
-    }
+    const list = document.getElementById('masterToDo'); 
+    list.innerHTML = '';
+    
+    masterTasks.forEach(t => {
+        list.innerHTML += `
+            <div class="todo-item">
+                <div style="font-weight:900; color:var(--accent); width:20px;">${t.importance}</div>
+                
+                <div style="flex:1;">
+                    <b>${t.title}</b><br>
+                    <small>${formatDate(t.due_date)} • ${t.duration}m</small>
+                </div>
+                
+                <div style="display:flex; gap:5px; align-items:center;">
+                    <button class="btn-edit" style="color:#ef4444" onclick='deleteTask("${t.id}")'>✕</button>
+                    
+                    <button class="btn-edit" onclick='editTask("${t.id}")'>✎</button>
+                    
+                    <button class="btn-done" onclick='completeTask("${t.id}")'>✓</button>
+                </div>
+            </div>`;
+    });
+}
 
     function renderArchived(tasks) {
         const list = document.getElementById('archivedToDo'); list.innerHTML = '';
