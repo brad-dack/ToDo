@@ -220,13 +220,29 @@
     async function finalisePlanning() {
         const toInsert = stagingTasks.map((t, idx) => ({ 
             title: `${activeGoal.goal}: ${t.title}`, 
-            duration: t.duration, due_date: t.due_date, 
-            importance: parseInt(activeGoal.imp), goal_deadline: activeGoal.date,
-            project_id: activeGoal.id, recurrence_rule: activeGoal.recur || null,
-            sort_order: idx // Preservation of drag order
+            duration: t.duration, 
+            due_date: t.due_date, 
+            importance: parseInt(activeGoal.imp), 
+            goal_deadline: activeGoal.date,
+            project_id: activeGoal.id, 
+            recurrence_rule: activeGoal.recur || null,
+            sort_order: idx 
         }));
-        await client.from('subtasks').insert(toInsert);
-        cancelPlanning(); refresh();
+
+        const { error } = await client.from('subtasks').insert(toInsert);
+        
+        if (error) {
+            alert("Error saving tasks: " + error.message);
+        } else {
+            // Reset the project inputs for the next use
+            document.getElementById('mainGoal').value = '';
+            document.getElementById('goalDate').value = '';
+            document.getElementById('recurRule').value = '';
+            document.getElementById('recurLabel').innerText = 'None';
+            
+            cancelPlanning(); 
+            refresh();
+        }
     }
 
     /* --- Core Actions & Capacity Fixes --- */
@@ -419,10 +435,16 @@ function toggleRecurrence() {
         ['mon','tue','wed','thu','fri','sat','sun'].forEach(d => n[`${d}_limit`] = parseInt(document.getElementById(`set-${d}`).value) || 0);
         await client.from('user_settings').upsert(n); settings = n; toggleSettings(); refresh();
     }
-    function cancelPlanning() {
+  function cancelPlanning() {
         document.getElementById('planningArea').classList.add('hidden');
         document.getElementById('goalCapture').classList.remove('hidden');
-        stagingTasks = []; document.getElementById('stagedList').innerHTML = '';
+        
+        // Clear the staging inputs and list
+        stagingTasks = []; 
+        document.getElementById('stagedList').innerHTML = '';
+        document.getElementById('stageTitle').value = '';
+        document.getElementById('stageMins').value = '15';
+        document.getElementById('stageDate').value = '';
     }
 </script>
 </body>
