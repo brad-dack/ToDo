@@ -409,6 +409,10 @@ async function editTask(id) {
         });
     }
 
+function toggleRecurrence() {
+        document.getElementById('recurrencePicker').classList.toggle('hidden');
+    }
+    
     function toggleSettings() { document.getElementById('settingsOverlay').classList.toggle('hidden'); }
     async function saveSettings() {
         const n = { id: 'default_user', timezone: document.getElementById('set-tz').value };
