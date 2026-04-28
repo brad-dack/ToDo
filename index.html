@@ -230,17 +230,37 @@
     }
 
     /* --- Core Actions & Capacity Fixes --- */
-    async function pushTask(id) {
-        const t = masterTasks.find(task => task.id == id);
-        const tom = new Date(); tom.setDate(tom.getDate() + 1);
-        const tomStr = tom.toISOString().split('T')[0];
+   async function pushTask(id) {
+    const t = masterTasks.find(task => task.id == id);
+    if (!t) return;
 
-        if (t.goal_deadline && tomStr > t.goal_deadline) return alert("Deadline reached!");
-        if (!hasCapacity(tomStr, t.duration)) return alert("Tomorrow is full!");
+    // Calculate the target date (one day after the task's current due_date)
+    const currentDueDate = new Date(t.due_date);
+    const targetDate = new Date(currentDueDate);
+    targetDate.setDate(targetDate.getDate() + 1);
+    const targetDateStr = targetDate.toISOString().split('T')[0];
 
-        await client.from('subtasks').update({ due_date: tomStr }).eq('id', id);
+    // 1. Deadline Check
+    if (t.goal_deadline && targetDateStr > t.goal_deadline) {
+        return alert("Cannot push: Past project deadline!");
+    }
+
+    // 2. Capacity Check for the SPECIFIC target date
+    if (!hasCapacity(targetDateStr, t.duration)) {
+        return alert(`${formatDate(targetDateStr)} is already at capacity!`);
+    }
+
+    // 3. Execute the move
+    const { error } = await client.from('subtasks')
+        .update({ due_date: targetDateStr, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+    if (error) {
+        console.error("Push Error:", error);
+    } else {
         refresh();
     }
+}
 
     async function pushAllToday() {
         const todayStr = new Date().toISOString().split('T')[0];
