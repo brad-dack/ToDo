@@ -311,6 +311,50 @@
         refresh();
     }
 
+async function editTask(id) {
+        const t = masterTasks.find(task => task.id == id);
+        if (!t) return;
+
+        // Construct the menu options dynamically
+        let menu = "1: Edit Title/Mins/Date";
+        if (t.recurrence_rule) menu += "\n2: Change Recurrence Frequency";
+        
+        const action = prompt(menu, "1");
+
+        if (action === "1") {
+            const newTitle = prompt("Update Title:", t.title);
+            const newMins = prompt("Update Minutes (max 15):", t.duration);
+            const newDate = prompt("Update Date (YYYY-MM-DD):", t.due_date);
+
+            if (newTitle && newMins && newDate) {
+                const duration = parseInt(newMins);
+                if (duration > 15) return alert("Task must be 15 mins or less.");
+                
+                // Capacity check for the new date/duration
+                // We ignore the current task's ID so we don't count its old duration against itself
+                if (!hasCapacity(newDate, duration, t.id)) {
+                    return alert("Target date is at capacity!");
+                }
+
+                await client.from('subtasks').update({ 
+                    title: newTitle, 
+                    duration: duration, 
+                    due_date: newDate 
+                }).eq('id', id);
+            }
+        } 
+        else if (action === "2" && t.recurrence_rule) {
+            const newRule = prompt("New Frequency (Daily, Weekly, Fortnightly, Monthly, Quarterly, Annually):", t.recurrence_rule);
+            const valid = ['Daily', 'Weekly', 'Fortnightly', 'Monthly', 'Quarterly', 'Bi-annually', 'Annually'];
+            
+            if (newRule && valid.includes(newRule)) {
+                // Updates all active tasks in this project so the next cycle inherits the change
+                await client.from('subtasks').update({ recurrence_rule: newRule }).eq('project_id', t.project_id);
+            }
+        }
+        refresh();
+    }
+    
     async function uncompleteTask(id) {
         await client.from('subtasks').update({ completed: false }).eq('id', id);
         refresh();
