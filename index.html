@@ -322,9 +322,21 @@
             const color = load > (settings[keys[d.getDay()]] || 45) ? 'var(--error)' : (load > 0 ? 'var(--success)' : 'rgba(255,255,255,0.1)');
             bar.innerHTML += `<div class="day-cap"><div style="font-size:0.6rem; opacity:0.6;">${['S','M','T','W','T','F','S'][d.getDay()]}</div><div class="cap-dot" style="background:${color};"></div></div>`;
         }
-        const deck = document.getElementById('priorityDeck'); deck.innerHTML = '';
+        
+        const deck = document.getElementById('priorityDeck'); 
+        deck.innerHTML = '';
         masterTasks.slice(0, 3).forEach(t => {
-            deck.innerHTML += `<div class="prio-card"><div class="prio-info"><span class="prio-title">${t.title}</span><span class="prio-meta">${formatDate(t.due_date)} • ${t.duration}m</span></div><button class="btn-done" onclick='completeTask("${t.id}")'>✓</button></div>`;
+            deck.innerHTML += `
+                <div class="prio-card">
+                    <div class="prio-info">
+                        <span class="prio-title">${t.title}</span>
+                        <span class="prio-meta">${formatDate(t.due_date)} • ${t.duration}m</span>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn-push" onclick='pushTask("${t.id}")'>→</button>
+                        <button class="btn-done" onclick='completeTask("${t.id}")'>✓</button>
+                    </div>
+                </div>`;
         });
     }
 
