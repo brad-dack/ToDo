@@ -184,7 +184,29 @@
         document.getElementById('stageTitle').value = '';
         renderStaging();
     }
+    
+async function pushTask(id) {
+        const t = masterTasks.find(task => task.id == id);
+        if (!t) return;
 
+        // Calculate tomorrow's date
+        const tom = new Date();
+        tom.setDate(tom.getDate() + 1);
+        const tomStr = tom.toISOString().split('T')[0];
+
+        // Safety check: Don't push past the hard deadline
+        if (t.goal_deadline && tomStr > t.goal_deadline) {
+            alert("Cannot push: Tomorrow is past the project deadline!");
+            return;
+        }
+
+        const { error } = await client.from('subtasks')
+            .update({ due_date: tomStr, updated_at: new Date().toISOString() })
+            .eq('id', id);
+
+        if (error) console.error("Push Error:", error);
+        refresh();
+    }
     function renderStaging() {
         document.getElementById('stagedList').innerHTML = stagingTasks.map(t => `<div class="staged-item"><b>${t.title}</b> - ${t.duration}m on ${formatDate(t.due_date)}</div>`).join('');
     }
