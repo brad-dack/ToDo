@@ -184,29 +184,7 @@
         document.getElementById('stageTitle').value = '';
         renderStaging();
     }
-    
-async function pushTask(id) {
-        const t = masterTasks.find(task => task.id == id);
-        if (!t) return;
 
-        // Calculate tomorrow's date
-        const tom = new Date();
-        tom.setDate(tom.getDate() + 1);
-        const tomStr = tom.toISOString().split('T')[0];
-
-        // Safety check: Don't push past the hard deadline
-        if (t.goal_deadline && tomStr > t.goal_deadline) {
-            alert("Cannot push: Tomorrow is past the project deadline!");
-            return;
-        }
-
-        const { error } = await client.from('subtasks')
-            .update({ due_date: tomStr, updated_at: new Date().toISOString() })
-            .eq('id', id);
-
-        if (error) console.error("Push Error:", error);
-        refresh();
-    }
     function renderStaging() {
         document.getElementById('stagedList').innerHTML = stagingTasks.map(t => `<div class="staged-item"><b>${t.title}</b> - ${t.duration}m on ${formatDate(t.due_date)}</div>`).join('');
     }
@@ -248,25 +226,30 @@ async function pushTask(id) {
     }
 
     async function uncompleteTask(id) {
-        const { error } = await client.from('subtasks')
-            .update({ completed: false, updated_at: new Date().toISOString() })
-            .eq('id', id);
+        const { error } = await client.from('subtasks').update({ completed: false }).eq('id', id);
         if (error) console.error("Undo Error:", error);
+        refresh();
+    }
+
+    async function pushTask(id) {
+        const t = masterTasks.find(task => task.id == id);
+        if (!t) return;
+        const tom = new Date(); tom.setDate(tom.getDate() + 1);
+        const tomStr = tom.toISOString().split('T')[0];
+
+        if (t.goal_deadline && tomStr > t.goal_deadline) {
+            alert("Cannot push: Past project deadline!");
+            return;
+        }
+        await client.from('subtasks').update({ due_date: tomStr }).eq('id', id);
         refresh();
     }
 
     async function deleteTask(id) {
         const task = masterTasks.find(t => t.id == id);
         if (!task) return;
-
-        let deleteOption = "One";
-        if (task.project_id) {
-            deleteOption = confirm("Delete ENTIRE project/recurrence? (Cancel for just this task)") ? "All" : "One";
-        } else {
-            if (!confirm("Delete this task?")) return;
-        }
-
-        if (deleteOption === "All") {
+        let mode = confirm("Delete ENTIRE project? (Cancel for just this task)") ? "All" : "One";
+        if (mode === "All" && task.project_id) {
             await client.from('subtasks').delete().eq('project_id', task.project_id);
         } else {
             await client.from('subtasks').delete().eq('id', id);
@@ -279,18 +262,24 @@ async function pushTask(id) {
         const daysToAdd = offsets[task.recurrence_rule];
         if (!daysToAdd) return;
 
-        const { data: templateTasks, error } = await client.from('subtasks').select('*').eq('project_id', task.project_id);
-        if (error || !templateTasks) return;
+        const { data: templateTasks } = await client.from('subtasks').select('*').eq('project_id', task.project_id);
+        if (!templateTasks) return;
 
         const newProjId = 'proj_' + Date.now();
         const newBatch = templateTasks.map(t => {
             let d = new Date(t.due_date); d.setDate(d.getDate() + daysToAdd);
             let g = new Date(t.goal_deadline); g.setDate(g.getDate() + daysToAdd);
+            
+            // WE MUST REMOVE THE OLD ID SO SUPABASE CAN CREATE A NEW ONE
+            const { id, ...taskData } = t; 
+            
             return {
-                title: t.title, duration: t.duration, importance: t.importance,
-                due_date: d.toISOString().split('T')[0], goal_deadline: g.toISOString().split('T')[0],
-                project_id: newProjId, recurrence_rule: t.recurrence_rule,
-                completed: false, updated_at: new Date().toISOString()
+                ...taskData,
+                due_date: d.toISOString().split('T')[0],
+                goal_deadline: g.toISOString().split('T')[0],
+                project_id: newProjId,
+                completed: false,
+                updated_at: new Date().toISOString()
             };
         });
         await client.from('subtasks').insert(newBatch);
@@ -298,40 +287,23 @@ async function pushTask(id) {
 
     async function editTask(id) {
         const t = masterTasks.find(task => task.id == id);
-        
-        const newTitle = prompt("Update Task Title:", t.title);
-        if (newTitle === null) return; // User cancelled
-
-        const newMins = prompt("Update Minutes (max 15):", t.duration);
-        if (newMins === null) return;
-
-        const newDate = prompt("Update Due Date (YYYY-MM-DD):", t.due_date);
-        if (newDate === null) return;
-
-        const duration = parseInt(newMins);
-        if (duration > 15) return alert("Task must be 15 mins or less.");
-
-        await client.from('subtasks').update({ 
-            title: newTitle, 
-            duration: duration, 
-            due_date: newDate 
-        }).eq('id', id);
-
-        refresh();
+        const newTitle = prompt("Update Title:", t.title);
+        const newMins = prompt("Minutes (15 max):", t.duration);
+        if (newTitle && newMins) {
+            await client.from('subtasks').update({ title: newTitle, duration: parseInt(newMins) }).eq('id', id);
+            refresh();
+        }
     }
 
     async function pushAllToday() {
         const todayStr = new Date().toISOString().split('T')[0];
         const tomStr = new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0];
         const todayTasks = masterTasks.filter(t => t.due_date === todayStr);
-        if (todayTasks.length === 0) return alert("Nothing scheduled for today!");
-        if (confirm(`Move ${todayTasks.length} tasks to tomorrow?`)) {
-            for (let t of todayTasks) {
-                if (t.goal_deadline && tomStr > t.goal_deadline) continue; 
-                await client.from('subtasks').update({ due_date: tomStr }).eq('id', t.id);
-            }
-            refresh();
+        for (let t of todayTasks) {
+            if (t.goal_deadline && tomStr > t.goal_deadline) continue; 
+            await client.from('subtasks').update({ due_date: tomStr }).eq('id', t.id);
         }
+        refresh();
     }
 
     /* --- UI Rendering --- */
@@ -344,16 +316,11 @@ async function pushTask(id) {
             const color = load > (settings[keys[d.getDay()]] || 45) ? 'var(--error)' : (load > 0 ? 'var(--success)' : 'rgba(255,255,255,0.1)');
             bar.innerHTML += `<div class="day-cap"><div style="font-size:0.6rem; opacity:0.6;">${['S','M','T','W','T','F','S'][d.getDay()]}</div><div class="cap-dot" style="background:${color};"></div></div>`;
         }
-        
-        const deck = document.getElementById('priorityDeck'); 
-        deck.innerHTML = '';
+        const deck = document.getElementById('priorityDeck'); deck.innerHTML = '';
         masterTasks.slice(0, 3).forEach(t => {
             deck.innerHTML += `
                 <div class="prio-card">
-                    <div class="prio-info">
-                        <span class="prio-title">${t.title}</span>
-                        <span class="prio-meta">${formatDate(t.due_date)} • ${t.duration}m</span>
-                    </div>
+                    <div class="prio-info"><span class="prio-title">${t.title}</span><span class="prio-meta">${formatDate(t.due_date)} • ${t.duration}m</span></div>
                     <div style="display:flex; gap:8px;">
                         <button class="btn-push" onclick='pushTask("${t.id}")'>→</button>
                         <button class="btn-done" onclick='completeTask("${t.id}")'>✓</button>
@@ -379,11 +346,7 @@ async function pushTask(id) {
     function renderArchived(tasks) {
         const list = document.getElementById('archivedToDo'); list.innerHTML = '';
         tasks.forEach(t => {
-            list.innerHTML += `
-                <div class="todo-item completed-item">
-                    <div style="flex:1;"><strike>${t.title}</strike></div>
-                    <button class="btn-edit" style="font-size:1rem;" onclick='uncompleteTask("${t.id}")'>⟲</button>
-                </div>`;
+            list.innerHTML += `<div class="todo-item completed-item"><div style="flex:1;"><strike>${t.title}</strike></div><button class="btn-edit" style="font-size:1rem;" onclick='uncompleteTask("${t.id}")'>⟲</button></div>`;
         });
     }
 
