@@ -285,14 +285,51 @@
         await client.from('subtasks').insert(newBatch);
     }
 
-    async function editTask(id) {
+   async function editTask(id) {
         const t = masterTasks.find(task => task.id == id);
-        const newTitle = prompt("Update Title:", t.title);
-        const newMins = prompt("Minutes (15 max):", t.duration);
-        if (newTitle && newMins) {
-            await client.from('subtasks').update({ title: newTitle, duration: parseInt(newMins) }).eq('id', id);
-            refresh();
+        if (!t) return;
+
+        // Base options
+        let promptText = "1: Edit Title/Mins/Date";
+        
+        // Dynamic option: Only show if the task belongs to a recurring project
+        if (t.recurrence_rule) {
+            promptText += "\n2: Change Recurrence (" + t.recurrence_rule + ")";
         }
+
+        const action = prompt(promptText, "1");
+
+        if (action === "1") {
+            const newTitle = prompt("Update Title:", t.title);
+            const newMins = prompt("Update Minutes (max 15):", t.duration);
+            const newDate = prompt("Update Due Date (YYYY-MM-DD):", t.due_date);
+            
+            if (newTitle && newMins && newDate) {
+                const duration = parseInt(newMins);
+                if (duration > 15) return alert("Task must be 15 mins or less.");
+                await client.from('subtasks').update({ 
+                    title: newTitle, 
+                    duration: duration, 
+                    due_date: newDate 
+                }).eq('id', id);
+            }
+        } 
+        else if (action === "2" && t.recurrence_rule) {
+            const newRule = prompt("New Frequency (Daily, Weekly, Fortnightly, Monthly, Quarterly, Annually):", t.recurrence_rule);
+            const validRules = ['Daily', 'Weekly', 'Fortnightly', 'Monthly', 'Quarterly', 'Bi-annually', 'Annually'];
+            
+            if (newRule && validRules.includes(newRule)) {
+                // Update ALL active tasks in this project so the next cycle picks up the new rule
+                await client.from('subtasks')
+                    .update({ recurrence_rule: newRule })
+                    .eq('project_id', t.project_id);
+                alert("Recurrence updated to " + newRule);
+            } else if (newRule) {
+                alert("Invalid rule. Please use standard frequencies.");
+            }
+        }
+
+        refresh();
     }
 
     async function pushAllToday() {
