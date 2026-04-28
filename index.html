@@ -178,8 +178,32 @@
         const title = document.getElementById('stageTitle').value;
         const mins = parseInt(document.getElementById('stageMins').value);
         const date = document.getElementById('stageDate').value;
-        if(mins > 15) return alert("break task down smaller (15min max)");
+        
+        if(!title || !mins || !date) return alert("All fields required");
+        if(mins > 15) return alert("Break task down smaller (15min max)");
         if(date > activeGoal.date) return alert("Date exceeds project deadline");
+
+        // --- NEW: Capacity Check ---
+        const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        const d = new Date(date);
+        const dayKey = dayNames[d.getDay()];
+        const dailyLimit = settings[`${dayKey}_limit`] || 45;
+
+        // Calculate load already in the database for that day
+        const existingLoad = masterTasks
+            .filter(t => t.due_date === date)
+            .reduce((sum, t) => sum + t.duration, 0);
+
+        // Calculate load already sitting in your "Staging" list for that day
+        const stagingLoad = stagingTasks
+            .filter(t => t.due_date === date)
+            .reduce((sum, t) => sum + t.duration, 0);
+
+        if ((existingLoad + stagingLoad + mins) > dailyLimit) {
+            return alert(`Capacity reached for ${formatDate(date)}! Limit: ${dailyLimit}m. (Current: ${existingLoad + stagingLoad}m)`);
+        }
+        // ---------------------------
+
         stagingTasks.push({ title, duration: mins, due_date: date });
         document.getElementById('stageTitle').value = '';
         renderStaging();
