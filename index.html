@@ -44,6 +44,19 @@
 
         /* Overlays */
         .recur-link { font-size: 0.65rem; color: var(--accent); text-decoration: none; font-weight: 700; cursor: pointer; position: absolute; right: 20px; top: 25px; }
+
+        /* Risk badges & banners */
+        .risk-banner { padding: 12px 14px; border-radius: 14px; margin-bottom: 16px; font-size: 0.75rem; line-height: 1.4; }
+        .risk-banner-overdue { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.35); color: #fecaca; }
+        .risk-banner-atrisk { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.35); color: #fde68a; }
+        .risk-banner b { color: white; }
+        .badge { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 0.55rem; font-weight: 800; letter-spacing: 0.5px; margin-left: 6px; vertical-align: middle; }
+        .badge-overdue { background: var(--error); color: white; }
+        .badge-atrisk { background: #f59e0b; color: white; }
+        .todo-overdue { border-left: 4px solid var(--error); }
+        .todo-atrisk { border-left: 4px solid #f59e0b; }
+        .prio-overdue { border: 1px solid rgba(239,68,68,0.5); }
+        .prio-atrisk { border: 1px solid rgba(245,158,11,0.5); }
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15,23,42,0.9); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .settings-card { background: white; width: 100%; max-width: 400px; border-radius: 24px; padding: 24px; max-height: 90vh; overflow-y: auto; }
         .hidden { display: none; }
@@ -61,6 +74,7 @@
             </div>
         </div>
         <div id="weekBar" class="week-bar"></div>
+        <div id="riskBanners"></div>
         <span class="section-title" style="color:rgba(255,255,255,0.5); margin: 0 0 12px 0;">Next 3 Priorities</span>
         <div id="priorityDeck" class="priority-deck"></div>
     </div>
@@ -200,15 +214,69 @@
         if (data) settings = data;
     }
 
+    let projectStates = {}, projectNames = {};
+
     async function refresh() {
         const { data: active } = await client.from('subtasks').select('*').eq('completed', false);
         const { data: completed } = await client.from('subtasks').select('*').eq('completed', true).order('updated_at', { ascending: false }).limit(5);
         masterTasks = active || [];
         masterTasks.sort((a,b) => new Date(a.due_date) - new Date(b.due_date) || b.importance - a.importance);
+        computeProjectStates();
         renderDashboard();
         renderToDo();
         renderArchived(completed || []);
     }
+
+    function computeProjectStates() {
+        projectStates = {}; projectNames = {};
+        const todayStr = localDateStr();
+        const dayKeys = ['sun','mon','tue','wed','thu','fri','sat'];
+
+        const byProject = {};
+        for (const t of masterTasks) {
+            if (!t.project_id) continue;
+            if (!byProject[t.project_id]) byProject[t.project_id] = { tasks: [], goal_deadline: t.goal_deadline };
+            byProject[t.project_id].tasks.push(t);
+            if (!projectNames[t.project_id] && t.title) {
+                const idx = t.title.indexOf(':');
+                projectNames[t.project_id] = idx > 0 ? t.title.slice(0, idx) : t.title;
+            }
+        }
+
+        for (const [pid, info] of Object.entries(byProject)) {
+            const deadline = info.goal_deadline;
+            if (!deadline) { projectStates[pid] = 'normal'; continue; }
+
+            if (deadline < todayStr) { projectStates[pid] = 'overdue'; continue; }
+
+            const projectMinutes = info.tasks.reduce((s,t) => s + t.duration, 0);
+            let pool = 0, cursor = todayStr;
+            while (cursor <= deadline) {
+                const limit = settings[dayKeys[dayOfWeek(cursor)] + '_limit'] || 0;
+                const otherLoad = masterTasks
+                    .filter(t => t.due_date === cursor && t.project_id !== pid)
+                    .reduce((s,t) => s + t.duration, 0);
+                pool += Math.max(0, limit - otherLoad);
+                cursor = addDays(cursor, 1);
+            }
+            projectStates[pid] = projectMinutes > pool ? 'at-risk' : 'normal';
+        }
+    }
+
+    const stateBadge = (pid) => {
+        const s = projectStates[pid];
+        if (s === 'overdue') return ' <span class="badge badge-overdue">OVERDUE</span>';
+        if (s === 'at-risk') return ' <span class="badge badge-atrisk">AT RISK</span>';
+        return '';
+    };
+    const stateRowClass = (pid) => {
+        const s = projectStates[pid];
+        return s === 'overdue' ? ' todo-overdue' : s === 'at-risk' ? ' todo-atrisk' : '';
+    };
+    const statePrioClass = (pid) => {
+        const s = projectStates[pid];
+        return s === 'overdue' ? ' prio-overdue' : s === 'at-risk' ? ' prio-atrisk' : '';
+    };
 
     function hasCapacity(dateStr, taskDuration, ignoreTaskId = null) {
         const days = ['sun','mon','tue','wed','thu','fri','sat'];
@@ -423,16 +491,27 @@
 
         const deck = document.getElementById('priorityDeck');
         deck.innerHTML = masterTasks.slice(0, 3).map(t =>
-            `<div class="prio-card"><div class="prio-info"><span class="prio-title">${esc(t.title)}</span><span class="prio-meta">${formatDate(t.due_date)}</span></div><div style="display:flex; gap:8px;"><button class="btn-push" data-id="${esc(t.id)}" data-act="push">→</button><button class="btn-done" data-id="${esc(t.id)}" data-act="complete">✓</button></div></div>`
+            `<div class="prio-card${statePrioClass(t.project_id)}"><div class="prio-info"><span class="prio-title">${esc(t.title)}${stateBadge(t.project_id)}</span><span class="prio-meta">${formatDate(t.due_date)}</span></div><div style="display:flex; gap:8px;"><button class="btn-push" data-id="${esc(t.id)}" data-act="push">→</button><button class="btn-done" data-id="${esc(t.id)}" data-act="complete">✓</button></div></div>`
         ).join('');
+
+        const banners = document.getElementById('riskBanners');
+        const overdue = [], atRisk = [];
+        for (const [pid, s] of Object.entries(projectStates)) {
+            if (s === 'overdue') overdue.push(pid);
+            else if (s === 'at-risk') atRisk.push(pid);
+        }
+        const parts = [];
+        if (overdue.length) parts.push(`<div class="risk-banner risk-banner-overdue"><b>Overdue:</b> ${overdue.map(p => esc(projectNames[p] || 'Untitled')).join(', ')}</div>`);
+        if (atRisk.length) parts.push(`<div class="risk-banner risk-banner-atrisk"><b>At risk:</b> ${atRisk.map(p => esc(projectNames[p] || 'Untitled')).join(', ')} — won't fit before deadline at current pace</div>`);
+        banners.innerHTML = parts.join('');
     }
 
     function renderToDo() {
         document.getElementById('masterToDo').innerHTML = masterTasks.map(t => `
-            <div class="todo-item">
+            <div class="todo-item${stateRowClass(t.project_id)}">
                 <div style="font-weight:900; color:var(--accent); width:20px;">${esc(t.importance)}</div>
                 <div style="flex:1;">
-                    <b>${esc(t.title)}</b><br>
+                    <b>${esc(t.title)}</b>${stateBadge(t.project_id)}<br>
                     <small>${formatDate(t.due_date)} • ${t.duration}m</small>
                 </div>
                 <div style="display:flex; gap:5px; align-items:center;">
