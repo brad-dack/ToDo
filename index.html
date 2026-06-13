@@ -25,9 +25,10 @@
 
         /* Vertical capacity bars */
         .week-bar { display: flex; gap: 6px; margin-bottom: 16px; }
-        .day-cap { flex: 1; text-align: center; font-size: 0.62rem; font-weight: 900; }
+        .day-cap { flex: 1; text-align: center; font-size: 0.62rem; font-weight: 900; cursor: pointer; }
         .day-cap .lbl { background: white; border: 2px solid var(--ink); border-radius: 8px; padding: 3px 0; display: block; margin-bottom: 4px; }
         .day-cap.today .lbl { background: var(--ink); color: var(--yellow); }
+        .day-cap.has-override .lbl { border-color: var(--teal); box-shadow: 0 0 0 1.5px var(--teal); }
         .cap-bar { height: 38px; width: 100%; border-radius: 8px; background: white; border: 2px solid var(--ink); position: relative; overflow: hidden; }
         .cap-fill { position: absolute; bottom: 0; left: 0; width: 100%; border-top: 2px solid var(--ink); }
 
@@ -51,7 +52,7 @@
         .badge-overdue { background: var(--red); color: white; }
         .badge-atrisk { background: var(--orange); }
 
-        .todo-item { display: flex; align-items: center; gap: 12px; padding: 14px; background: white; border: 3px solid var(--ink); border-radius: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
+        .todo-item { display: flex; align-items: center; gap: 10px; padding: 14px; background: white; border: 3px solid var(--ink); border-radius: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
         .todo-item b { font-size: 0.88rem; }
         .todo-item small { font-weight: 700; opacity: 0.6; }
         .completed-item { opacity: 0.5; box-shadow: none; background: var(--bg); border-style: dashed; }
@@ -71,10 +72,12 @@
         .imp-9  { background: #1e40af; color: white; }
         .imp-10 { background: #172554; color: white; }
 
-        .btn-done { background: var(--green); color: var(--ink); width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; border: 2.5px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); font-weight: 900; }
-        .btn-done:active, .submit-btn:active, .nav-btn-add:active { transform: translate(2px,2px); box-shadow: none; }
-        .btn-push { background: white; color: var(--ink); padding: 0 12px; height: 40px; border-radius: 10px; font-size: 0.85rem; font-weight: 900; border: 2.5px solid var(--ink); cursor: pointer; box-shadow: 2px 2px 0 var(--ink); }
-        .btn-edit { background: none; border: none; color: var(--ink); cursor: pointer; padding: 5px; font-size: 1.1rem; opacity: 0.6; }
+        .btn-done { background: var(--green); color: var(--ink); width: 42px; height: 42px; border-radius: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; border: 2.5px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); font-weight: 900; }
+        .btn-done:active, .submit-btn:active, .nav-btn-add:active, .btn-push:active { transform: translate(2px,2px); box-shadow: none; }
+        .btn-push { background: white; color: var(--ink); width: 42px; height: 42px; border-radius: 11px; font-size: 0.95rem; font-weight: 900; border: 2.5px solid var(--ink); cursor: pointer; box-shadow: 2px 2px 0 var(--ink); flex-shrink: 0; }
+        /* Bigger tap targets for edit / delete on mobile */
+        .btn-edit { background: white; border: 2.5px solid var(--ink); color: var(--ink); cursor: pointer; width: 42px; height: 42px; border-radius: 11px; font-size: 1.15rem; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 2px 2px 0 var(--ink); }
+        .btn-edit:active { transform: translate(2px,2px); box-shadow: none; }
         .btn-bulk { background: var(--teal); color: var(--ink); border: 2.5px solid var(--ink); font-size: 0.62rem; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: 900; box-shadow: 2px 2px 0 var(--ink); letter-spacing: 0.5px; }
 
         input, select { width: 100%; height: 50px; padding: 0 14px; border-radius: 12px; border: 3px solid var(--ink); font-size: 16px; margin-bottom: 12px; outline: none; background: white; font-family: inherit; font-weight: 700; }
@@ -86,7 +89,29 @@
         .page-header h2 { margin: 4px 0 18px; font-size: 1.5rem; font-weight: 900; }
         .page-header h2 span { background: var(--teal); color: var(--ink); padding: 2px 10px; border-radius: 10px; border: 3px solid var(--ink); display: inline-block; transform: rotate(-1.5deg); box-shadow: 3px 3px 0 var(--ink); }
         .recur-link { font-size: 0.65rem; color: var(--blue); text-decoration: none; font-weight: 800; cursor: pointer; position: absolute; right: 20px; top: 22px; }
+        .deadline-ref { font-weight: 400; opacity: 0.7; font-size: 0.8rem; }
         .hidden { display: none; }
+
+        /* ---- Themed modals ---- */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(26,26,26,0.55); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 18px; }
+        .modal-card { background: white; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 6px 6px 0 var(--ink); padding: 20px; width: 100%; max-width: 420px; max-height: 86vh; overflow-y: auto; }
+        .modal-title { margin: 0 0 14px; font-size: 1.2rem; font-weight: 900; }
+        .modal-msg { font-size: 0.9rem; font-weight: 700; line-height: 1.5; margin: 0 0 4px; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+        .modal-cancel { background: white; color: var(--ink); border: 3px solid var(--ink); border-radius: 14px; font-weight: 900; font-family: inherit; cursor: pointer; flex: 1; height: 54px; box-shadow: var(--shadow); }
+        .modal-cancel:active { transform: translate(2px,2px); box-shadow: none; }
+        .imp-picker-btn { width: 100%; height: 50px; border-radius: 12px; border: 3px solid var(--ink); background: white; font-family: inherit; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 0 10px; margin-bottom: 12px; text-align: left; }
+        .imp-picker-btn:active { transform: translate(2px,2px); }
+        .imp-pick-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 8px; border: 2.5px solid var(--ink); border-radius: 12px; background: white; cursor: pointer; font-family: inherit; font-size: 0.82rem; font-weight: 700; text-align: left; }
+        .imp-pick-row:active { transform: translate(2px,2px); }
+        .cap-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+        .cap-meter { flex: 1; height: 16px; background: var(--bg); border: 2.5px solid var(--ink); border-radius: 8px; overflow: hidden; }
+        .cap-meter-fill { height: 100%; }
+        .cap-label { font-size: 0.72rem; font-weight: 900; white-space: nowrap; }
+        .cap-controls { background: var(--bg); border: 2px solid var(--ink); border-radius: 12px; padding: 12px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
+        .qty-btn { background: white; border: 2.5px solid var(--ink); border-radius: 10px; height: 42px; font-weight: 900; font-family: inherit; cursor: pointer; box-shadow: 2px 2px 0 var(--ink); flex: 1; }
+        .qty-btn:active { transform: translate(2px,2px); box-shadow: none; }
+        .day-task { display: flex; align-items: center; gap: 8px; padding: 10px; border: 2px solid var(--ink); border-radius: 12px; margin-bottom: 8px; }
 
         /* ---- Bottom Nav: chunky toy bar ---- */
         .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; display: flex; justify-content: center; padding: 14px 16px 18px; pointer-events: none; }
@@ -144,18 +169,22 @@
         <div class="page-header"><h2><span>New Project 🚀</span></h2></div>
 
         <div class="card" id="goalCapture">
-            <a class="recur-link" onclick="toggleRecurrence()">⚡ Reoccurring: <span id="recurLabel">None</span></a>
+            <a class="recur-link" onclick="toggleRecurrence()">⚡ Reoccurring: <span id="recurLabel">Never</span></a>
             <span class="section-title" style="margin-top:0;">🎯 Project Goal</span>
             <input id="mainGoal" placeholder="Project Name">
-            <div style="display:flex; gap:12px; align-items: flex-end;">
-                <div style="flex:1;"><label class="field-label">Deadline</label><input type="date" id="goalDate"></div>
-                <div style="flex:0 0 40%;"><label class="field-label">Importance</label><select id="mainImp"></select></div>
+            <div style="display:flex; gap:12px;">
+                <div style="flex:1; min-width:0;"><label class="field-label">Deadline</label><input type="date" id="goalDate"></div>
+                <div style="flex:1; min-width:0;">
+                    <label class="field-label">Importance</label>
+                    <input type="hidden" id="mainImp" value="5">
+                    <button type="button" class="imp-picker-btn" id="mainImpBtn" onclick="openImportancePicker(parseInt(document.getElementById('mainImp').value), setMainImp)"></button>
+                </div>
             </div>
 
             <div id="recurrencePicker" class="hidden" style="margin-top:10px; padding:15px; background:var(--bg); border-radius:12px; border:2px solid var(--ink);">
                 <label class="field-label">Repeat Every:</label>
-                <select id="recurRule" onchange="document.getElementById('recurLabel').innerText = this.value || 'None'">
-                    <option value="">None</option>
+                <select id="recurRule" onchange="document.getElementById('recurLabel').innerText = this.value || 'Never'">
+                    <option value="">Never</option>
                     <option value="Daily">Daily</option>
                     <option value="Weekly">Weekly</option>
                     <option value="Fortnightly">Fortnightly</option>
@@ -172,8 +201,8 @@
             <h3 id="displayGoal" style="margin:0 0 15px 0; font-size:1.05rem; font-weight:900;"></h3>
             <input id="stageTitle" placeholder="Action Title">
             <div style="display:flex; gap:12px;">
-                <div style="flex:0 0 35%;"><label class="field-label">Mins (15 max)</label><input type="number" id="stageMins" max="15" value="15"></div>
-                <div style="flex:1;"><label class="field-label">Action Date</label><input type="date" id="stageDate"></div>
+                <div style="flex:0 0 35%; min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="stageMins" max="15" value="15"></div>
+                <div style="flex:1; min-width:0;"><label class="field-label">Action Date</label><input type="date" id="stageDate"></div>
             </div>
             <button onclick="addToStaging()" style="background:var(--green); color:var(--ink); width:100%; height:50px; border-radius:12px; font-weight:900; margin-bottom:15px; border:3px solid var(--ink); cursor:pointer; box-shadow:var(--shadow); font-family:inherit;">+ Add to Sequence</button>
             <div id="stagedList" style="margin-bottom:15px;"></div>
@@ -224,12 +253,49 @@
 <script>
     const CONFIG = { URL: "https://wuhklqulwhioiynoadtj.supabase.co", KEY: "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx" };
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
-    let masterTasks = [], stagingTasks = [], activeGoal = null, settings = {}, streakCount = 0;
+    let masterTasks = [], stagingTasks = [], activeGoal = null, settings = {}, streakCount = 0, capacityOverrides = {};
 
     const formatDate = (dStr) => { if(!dStr) return ""; const [y,m,d] = dStr.split("-"); return `${d}/${m}/${y.slice(-2)}`; };
 
     const ESC_MAP = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ESC_MAP[c]);
+
+    const IMPORTANCE_LABELS = [
+        "Nobody will care. Not even you.",
+        "Future you might smile. Maybe.",
+        "Nice to have. Sprinkles on the donut.",
+        "Someone notices if it's missing, briefly.",
+        "World keeps spinning, just slightly wobblier.",
+        "Skipping this creates a mess. Your mess.",
+        "This one actually matters. Don't skip it.",
+        "Things will get bad if ignored.",
+        "Real consequences are waiting on the other side.",
+        "Smoke is visible. All hands on deck."
+    ];
+
+    const impButtonHtml = (val) => {
+        const v = Math.min(10, Math.max(1, parseInt(val) || 5));
+        return `<div class="imp-chip imp-${v}" style="width:30px;height:30px;font-size:0.8rem;flex:0 0 auto;">${v}</div><span style="flex:1; font-size:0.8rem;">${esc(IMPORTANCE_LABELS[v-1])}</span><span style="opacity:0.5;">▾</span>`;
+    };
+
+    const setMainImp = (v) => {
+        document.getElementById('mainImp').value = v;
+        document.getElementById('mainImpBtn').innerHTML = impButtonHtml(v);
+    };
+
+    function openImportancePicker(currentVal, onSelect) {
+        const node = document.createElement('div');
+        node.innerHTML = `<h3 class="modal-title">How important is this?</h3>` +
+            Array.from({length:10}, (_,i) => i+1).map(v => `
+                <button type="button" class="imp-pick-row" data-val="${v}" style="${v===currentVal ? 'box-shadow:0 0 0 3px var(--teal);' : ''}">
+                    <div class="imp-chip imp-${v}">${v}</div>
+                    <span>${esc(IMPORTANCE_LABELS[v-1])}</span>
+                </button>`).join('') +
+            `<div class="modal-actions"><button class="modal-cancel" style="flex:1;">Cancel</button></div>`;
+        const m = openModal(node);
+        node.querySelector('.modal-cancel').onclick = m.close;
+        node.querySelectorAll('.imp-pick-row').forEach(b => b.onclick = () => { onSelect(parseInt(b.dataset.val)); m.close(); });
+    }
 
     const tz = () => settings.timezone || 'Australia/Perth';
     const localDateStr = (d = new Date()) => {
@@ -265,13 +331,56 @@
 
     const dbCall = async (promise, label) => {
         const { data, error } = await promise;
-        if (error) { alert(`${label} failed: ${error.message}`); return { error }; }
+        if (error) { uiAlert(`${label} failed: ${error.message}`); return { error }; }
         return { data };
     };
 
+    /* Effective minute capacity for a date: per-date override wins, else weekday setting. */
+    const dayLimit = (dateStr, fallback = 45) => {
+        if (dateStr in capacityOverrides) return capacityOverrides[dateStr];
+        const dayKeys = ['sun','mon','tue','wed','thu','fri','sat'];
+        return settings[dayKeys[dayOfWeek(dateStr)] + '_limit'] || fallback;
+    };
+
+    /* ---------- Themed modal helpers (replace browser alert/confirm) ---------- */
+    function openModal(node, { dismissable = true } = {}) {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        const card = document.createElement('div');
+        card.className = 'modal-card';
+        card.appendChild(node);
+        overlay.appendChild(card);
+        document.body.appendChild(overlay);
+        const close = () => overlay.remove();
+        if (dismissable) overlay.addEventListener('mousedown', e => { if (e.target === overlay) close(); });
+        return { overlay, card, close };
+    }
+
+    function uiAlert(msg, title = 'Heads up') {
+        return new Promise(resolve => {
+            const node = document.createElement('div');
+            node.innerHTML = `<h3 class="modal-title">${esc(title)}</h3><p class="modal-msg">${esc(msg)}</p><div class="modal-actions"><button class="submit-btn">OK</button></div>`;
+            const m = openModal(node, { dismissable: false });
+            node.querySelector('button').onclick = () => { m.close(); resolve(); };
+        });
+    }
+
+    function uiConfirm(msg, { title = 'Are you sure?', okLabel = 'OK', danger = false } = {}) {
+        return new Promise(resolve => {
+            const node = document.createElement('div');
+            node.innerHTML = `<h3 class="modal-title">${esc(title)}</h3><p class="modal-msg">${esc(msg)}</p>
+                <div class="modal-actions">
+                    <button class="modal-cancel">Cancel</button>
+                    <button class="submit-btn" style="flex:1;${danger ? 'background:var(--red);' : ''}">${esc(okLabel)}</button>
+                </div>`;
+            const m = openModal(node, { dismissable: false });
+            node.querySelector('.modal-cancel').onclick = () => { m.close(); resolve(false); };
+            node.querySelector('.submit-btn').onclick = () => { m.close(); resolve(true); };
+        });
+    }
+
     window.onload = async () => {
-        const sel = document.getElementById('mainImp');
-        for(let i=1; i<=10; i++) sel.options[sel.options.length] = new Option(i, i);
+        setMainImp(5);
         const grid = document.getElementById('settingsGrid');
         ['mon','tue','wed','thu','fri','sat','sun'].forEach(d => grid.innerHTML += `<div><label class="field-label">${d}</label><input type="number" id="set-${d}"></div>`);
 
@@ -285,6 +394,11 @@
 
         document.querySelectorAll('.bottom-nav [data-screen]').forEach(btn => {
             btn.addEventListener('click', () => showScreen(btn.dataset.screen));
+        });
+
+        document.getElementById('weekBar').addEventListener('click', e => {
+            const cell = e.target.closest('.day-cap');
+            if (cell && cell.dataset.date) openDayModal(cell.dataset.date);
         });
 
         await loadSettings();
@@ -305,9 +419,16 @@
         if (data) settings = data;
     }
 
+    async function loadOverrides() {
+        const { data, error } = await client.from('capacity_overrides').select('*');
+        capacityOverrides = {};
+        if (!error && data) data.forEach(r => { capacityOverrides[r.date] = r.limit_override; });
+    }
+
     let projectStates = {}, projectNames = {};
 
     async function refresh() {
+        await loadOverrides();
         const { data: active } = await client.from('subtasks').select('*').eq('completed', false);
         const { data: completed } = await client.from('subtasks').select('*').eq('completed', true).order('updated_at', { ascending: false }).limit(5);
         masterTasks = active || [];
@@ -339,7 +460,6 @@
     function computeProjectStates() {
         projectStates = {}; projectNames = {};
         const todayStr = localDateStr();
-        const dayKeys = ['sun','mon','tue','wed','thu','fri','sat'];
 
         const byProject = {};
         for (const t of masterTasks) {
@@ -361,7 +481,7 @@
             const projectMinutes = info.tasks.reduce((s,t) => s + t.duration, 0);
             let pool = 0, cursor = todayStr;
             while (cursor <= deadline) {
-                const limit = settings[dayKeys[dayOfWeek(cursor)] + '_limit'] || 0;
+                const limit = dayLimit(cursor, 0);
                 const otherLoad = masterTasks
                     .filter(t => t.due_date === cursor && t.project_id !== pid)
                     .reduce((s,t) => s + t.duration, 0);
@@ -384,24 +504,23 @@
     };
 
     function hasCapacity(dateStr, taskDuration, ignoreTaskId = null) {
-        const days = ['sun','mon','tue','wed','thu','fri','sat'];
-        const limit = settings[`${days[dayOfWeek(dateStr)]}_limit`] || 45;
-
+        const limit = dayLimit(dateStr);
         const currentLoad = masterTasks
             .filter(t => t.due_date === dateStr && t.id !== ignoreTaskId)
             .reduce((s, t) => s + t.duration, 0);
-
         return (currentLoad + taskDuration) <= limit;
     }
 
     function lockGoal() {
         const goal = document.getElementById('mainGoal').value.trim();
         const date = document.getElementById('goalDate').value;
-        if(!goal || !date) return alert("Goal Name & Deadline required");
-        if(date < localDateStr()) return alert("Deadline cannot be in the past");
+        if(!goal || !date) return uiAlert("Goal Name & Deadline required");
+        if(date < localDateStr()) return uiAlert("Deadline cannot be in the past");
         activeGoal = { goal, date, imp: document.getElementById('mainImp').value, recur: document.getElementById('recurRule').value, id: 'proj_' + Date.now() };
-        document.getElementById('displayGoal').innerText = `Project: ${goal}`;
-        document.getElementById('stageDate').value = date;
+        document.getElementById('displayGoal').innerHTML = `${esc(goal)} <span class="deadline-ref">· due ${formatDate(date)}</span>`;
+        const stageDate = document.getElementById('stageDate');
+        stageDate.value = date;
+        stageDate.max = date;
         document.getElementById('goalCapture').classList.add('hidden');
         document.getElementById('planningArea').classList.remove('hidden');
     }
@@ -411,14 +530,14 @@
         const mins = parseInt(document.getElementById('stageMins').value);
         const date = document.getElementById('stageDate').value;
 
-        if(!title) return alert("Action title required");
-        if(!date) return alert("Action date required");
-        if(!Number.isFinite(mins) || mins <= 0) return alert("Minutes must be a positive number");
-        if(mins > 15) return alert("Max 15 mins per action");
-        if(date > activeGoal.date) return alert("Action date past deadline");
+        if(!title) return uiAlert("Action title required");
+        if(!date) return uiAlert("Action date required");
+        if(!Number.isFinite(mins) || mins <= 0) return uiAlert("Minutes must be a positive number");
+        if(mins > 15) return uiAlert("Max 15 mins per action");
+        if(date > activeGoal.date) return uiAlert("Action date past deadline");
 
         const stagedLoad = stagingTasks.filter(t => t.due_date === date).reduce((s,t) => s + t.duration, 0);
-        if(!hasCapacity(date, mins + stagedLoad)) return alert("Day is at capacity!");
+        if(!hasCapacity(date, mins + stagedLoad)) return uiAlert("Day is at capacity!");
 
         stagingTasks.push({ title, duration: mins, due_date: date });
         document.getElementById('stageTitle').value = '';
@@ -443,16 +562,17 @@
             sort_order: idx
         }));
 
-        if (!toInsert.length) return alert("Add at least one action before committing");
+        if (!toInsert.length) return uiAlert("Add at least one action before committing");
         const { error } = await client.from('subtasks').insert(toInsert);
 
         if (error) {
-            alert("Error saving tasks: " + error.message);
+            uiAlert("Error saving tasks: " + error.message);
         } else {
             document.getElementById('mainGoal').value = '';
             document.getElementById('goalDate').value = '';
             document.getElementById('recurRule').value = '';
-            document.getElementById('recurLabel').innerText = 'None';
+            document.getElementById('recurLabel').innerText = 'Never';
+            setMainImp(5);
 
             cancelPlanning();
             showScreen('home');
@@ -465,8 +585,8 @@
         if (!t) return;
         const targetDateStr = addDays(t.due_date, 1);
 
-        if (t.goal_deadline && targetDateStr > t.goal_deadline) return alert("Cannot push: Past project deadline!");
-        if (!hasCapacity(targetDateStr, t.duration, t.id)) return alert(`${formatDate(targetDateStr)} is already at capacity!`);
+        if (t.goal_deadline && targetDateStr > t.goal_deadline) return uiAlert("Cannot push: Past project deadline!");
+        if (!hasCapacity(targetDateStr, t.duration, t.id)) return uiAlert(`${formatDate(targetDateStr)} is already at capacity!`);
 
         const { error } = await dbCall(client.from('subtasks').update({ due_date: targetDateStr, updated_at: new Date().toISOString() }).eq('id', id), "Push");
         if (!error) refresh();
@@ -486,7 +606,7 @@
                 count++;
             }
         }
-        alert(`Pushed ${count} tasks${failed ? ` (${failed} failed)` : ''}.`);
+        uiAlert(`Pushed ${count} tasks${failed ? ` (${failed} failed)` : ''}.`);
         refresh();
     }
 
@@ -505,7 +625,7 @@
     async function handleRecurrence(task) {
         if (!RECUR_OFFSETS[task.recurrence_rule]) return;
         const { data: templates, error } = await client.from('subtasks').select('*').eq('project_id', task.project_id);
-        if (error || !templates) { alert("Recurrence clone failed: " + (error?.message || "no rows")); return; }
+        if (error || !templates) { uiAlert("Recurrence clone failed: " + (error?.message || "no rows")); return; }
         const newProjId = 'proj_' + Date.now();
 
         const newBatch = templates.map(t => {
@@ -522,57 +642,145 @@
     }
 
     async function deleteTask(id) {
-        if (!confirm("Delete this task?")) return;
+        if (!await uiConfirm("This action can't be undone.", { title: "Delete task?", okLabel: "Delete", danger: true })) return;
         const { error } = await dbCall(client.from('subtasks').delete().eq('id', id), "Delete");
         if (!error) refresh();
     }
 
     const VALID_RULES = ['Daily', 'Weekly', 'Fortnightly', 'Monthly', 'Quarterly', 'Bi-annually', 'Annually'];
 
-    async function editTask(id) {
+    /* Edit via a themed form modal (replaces the chained browser prompts) */
+    function editTask(id) {
         const t = masterTasks.find(task => task.id == id);
         if (!t) return;
-        let menu = "1: Edit Title/Mins/Date/Importance";
-        if (t.recurrence_rule) menu += "\n2: Change Recurrence Frequency";
-        const action = prompt(menu, "1");
+        const node = document.createElement('div');
+        const impOpts = Array.from({length:10}, (_,i) => `<option value="${i+1}" ${t.importance == i+1 ? 'selected' : ''}>${i+1}</option>`).join('');
+        const recurBlock = t.recurrence_rule ? `
+            <label class="field-label">Recurrence (whole project)</label>
+            <select id="edit-recur">${VALID_RULES.map(r => `<option ${t.recurrence_rule === r ? 'selected' : ''}>${r}</option>`).join('')}</select>` : '';
+        node.innerHTML = `
+            <h3 class="modal-title">Edit Action</h3>
+            <label class="field-label">Title</label>
+            <input id="edit-title" value="${esc(t.title)}">
+            <div style="display:flex; gap:12px;">
+                <div style="flex:0 0 38%; min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="edit-mins" max="15" value="${esc(t.duration)}"></div>
+                <div style="flex:1; min-width:0;"><label class="field-label">Date</label><input type="date" id="edit-date" value="${esc(t.due_date)}"${t.goal_deadline ? ` max="${esc(t.goal_deadline)}"` : ''}></div>
+            </div>
+            <label class="field-label">Importance</label>
+            <select id="edit-imp">${impOpts}</select>
+            ${recurBlock}
+            <div class="modal-actions">
+                <button class="modal-cancel">Cancel</button>
+                <button class="submit-btn" id="edit-save" style="flex:2;">Save</button>
+            </div>`;
+        const m = openModal(node);
+        node.querySelector('.modal-cancel').onclick = m.close;
+        node.querySelector('#edit-save').onclick = async () => {
+            const newTitle = node.querySelector('#edit-title').value.trim();
+            const duration = parseInt(node.querySelector('#edit-mins').value);
+            const newDate = node.querySelector('#edit-date').value;
+            const importance = parseInt(node.querySelector('#edit-imp').value);
 
-        if (action === "1") {
-            const newTitle = prompt("Update Title:", t.title);
-            if (newTitle === null) return;
-            const newMins = prompt("Update Minutes (max 15):", t.duration);
-            if (newMins === null) return;
-            const newDate = prompt("Update Date (YYYY-MM-DD):", t.due_date);
-            if (newDate === null) return;
-            const newImp = prompt("Update Importance (1-10):", t.importance);
-            if (newImp === null) return;
+            if (!newTitle) return uiAlert("Title required.");
+            if (!Number.isFinite(duration) || duration <= 0) return uiAlert("Minutes must be a positive number.");
+            if (duration > 15) return uiAlert("Task must be 15 mins or less.");
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return uiAlert("Please pick a date.");
+            if (t.goal_deadline && newDate > t.goal_deadline) return uiAlert("Date is past project deadline.");
+            if (!hasCapacity(newDate, duration, t.id)) return uiAlert("Target date is at capacity!");
 
-            const duration = parseInt(newMins);
-            const importance = parseInt(newImp);
-            if (!newTitle.trim()) return alert("Title required.");
-            if (!Number.isFinite(duration) || duration <= 0) return alert("Minutes must be a positive number.");
-            if (duration > 15) return alert("Task must be 15 mins or less.");
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return alert("Date must be YYYY-MM-DD.");
-            if (!Number.isFinite(importance) || importance < 1 || importance > 10) return alert("Importance must be 1-10.");
-            if (t.goal_deadline && newDate > t.goal_deadline) return alert("Date is past project deadline.");
-            if (!hasCapacity(newDate, duration, t.id)) return alert("Target date is at capacity!");
-
-            const { error } = await dbCall(client.from('subtasks').update({ title: newTitle.trim(), duration, due_date: newDate, importance, updated_at: new Date().toISOString() }).eq('id', id), "Edit");
+            const { error } = await dbCall(client.from('subtasks').update({ title: newTitle, duration, due_date: newDate, importance, updated_at: new Date().toISOString() }).eq('id', id), "Edit");
             if (error) return;
-        } else if (action === "2" && t.recurrence_rule) {
-            const newRule = prompt("New Frequency (" + VALID_RULES.join('/') + "):", t.recurrence_rule);
-            if (newRule === null) return;
-            if (!VALID_RULES.includes(newRule)) return alert("Invalid frequency.");
-            const { error } = await dbCall(client.from('subtasks').update({ recurrence_rule: newRule, updated_at: new Date().toISOString() }).eq('project_id', t.project_id), "Edit recurrence");
-            if (error) return;
-        } else {
-            return;
-        }
-        refresh();
+
+            if (t.recurrence_rule) {
+                const newRule = node.querySelector('#edit-recur').value;
+                if (newRule !== t.recurrence_rule && VALID_RULES.includes(newRule)) {
+                    await dbCall(client.from('subtasks').update({ recurrence_rule: newRule, updated_at: new Date().toISOString() }).eq('project_id', t.project_id), "Edit recurrence");
+                }
+            }
+            m.close();
+            refresh();
+        };
     }
 
     async function uncompleteTask(id) {
         const { error } = await dbCall(client.from('subtasks').update({ completed: false, updated_at: new Date().toISOString() }).eq('id', id), "Uncomplete");
         if (!error) refresh();
+    }
+
+    /* ---------- Day-detail popup with per-date capacity controls ---------- */
+    function openDayModal(dateStr) {
+        const node = document.createElement('div');
+        openModal(node);
+        renderDayModalBody(dateStr, node);
+    }
+
+    function renderDayModalBody(dateStr, node) {
+        const tasks = masterTasks.filter(t => t.due_date === dateStr).sort((a,b) => b.importance - a.importance);
+        const load = tasks.reduce((s,t) => s + t.duration, 0);
+        const limit = dayLimit(dateStr);
+        const pct = limit ? Math.min(100, (load / limit) * 100) : (load > 0 ? 100 : 0);
+        const over = dateStr in capacityOverrides;
+        const color = (load >= limit && limit > 0) ? 'var(--red)' : pct >= 66 ? 'var(--orange)' : load > 0 ? 'var(--green)' : 'var(--green)';
+        const dObj = parseDateUTC(dateStr);
+        let heading = new Intl.DateTimeFormat('en-AU', { weekday:'long', day:'numeric', month:'long', timeZone:'UTC' }).format(dObj);
+        if (dateStr === localDateStr()) heading = 'Today · ' + heading;
+
+        const taskHtml = tasks.length ? tasks.map(t => {
+            const impClass = `imp-${Math.min(10, Math.max(1, parseInt(t.importance) || 1))}`;
+            const s = splitTitle(t.title);
+            return `<div class="day-task">
+                <div class="imp-chip ${impClass}" style="width:28px; height:28px; font-size:0.8rem;">${esc(t.importance)}</div>
+                <div style="flex:1; min-width:0;"><b style="font-size:0.85rem;">${esc(s.name)}</b><br><small style="opacity:0.6;">${esc(s.proj) || '—'} • ${t.duration}m</small></div>
+                <button class="btn-push dm-push" data-id="${esc(t.id)}">→</button>
+                <button class="btn-done dm-done" data-id="${esc(t.id)}">✓</button>
+                <button class="btn-edit dm-del" data-id="${esc(t.id)}" style="color:var(--red);">✕</button>
+            </div>`;
+        }).join('') : `<p class="modal-msg" style="text-align:center; opacity:0.6;">Nothing planned 🎉</p>`;
+
+        node.innerHTML = `
+            <h3 class="modal-title">${esc(heading)}</h3>
+            <div class="cap-row">
+                <div class="cap-meter"><div class="cap-meter-fill" style="width:${pct}%; background:${color};"></div></div>
+                <span class="cap-label">${load} / ${limit}m</span>
+            </div>
+            <div class="cap-controls">
+                <span class="field-label">Capacity for this date</span>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <button class="qty-btn dm-minus">− 15</button>
+                    <button class="qty-btn dm-plus">+ 15</button>
+                    ${over ? `<button class="qty-btn dm-reset" style="background:var(--bg);">Reset</button>` : ''}
+                </div>
+                ${over ? `<small style="opacity:0.6;">✦ Custom capacity set for this date only</small>` : `<small style="opacity:0.6;">Using your weekly default</small>`}
+            </div>
+            <span class="field-label">Tasks</span>
+            <div style="margin-top:8px;">${taskHtml}</div>
+            <div class="modal-actions"><button class="submit-btn dm-close" style="background:var(--ink);">Close</button></div>`;
+
+        node.querySelector('.dm-close').onclick = () => { const o = node.closest('.modal-overlay'); if (o) o.remove(); };
+        node.querySelector('.dm-minus').onclick = () => adjustOverride(dateStr, -15, node);
+        node.querySelector('.dm-plus').onclick = () => adjustOverride(dateStr, 15, node);
+        const reset = node.querySelector('.dm-reset');
+        if (reset) reset.onclick = () => resetOverride(dateStr, node);
+        node.querySelectorAll('.dm-done').forEach(b => b.onclick = async () => { await completeTask(b.dataset.id); renderDayModalBody(dateStr, node); });
+        node.querySelectorAll('.dm-push').forEach(b => b.onclick = async () => { await pushTask(b.dataset.id); renderDayModalBody(dateStr, node); });
+        node.querySelectorAll('.dm-del').forEach(b => b.onclick = async () => { await deleteTask(b.dataset.id); renderDayModalBody(dateStr, node); });
+    }
+
+    async function adjustOverride(dateStr, delta, node) {
+        const next = Math.max(0, dayLimit(dateStr) + delta);
+        const { error } = await dbCall(client.from('capacity_overrides').upsert({ date: dateStr, limit_override: next }), "Set capacity");
+        if (error) return;
+        await loadOverrides();
+        computeProjectStates(); renderDashboard(); renderToDo();
+        renderDayModalBody(dateStr, node);
+    }
+
+    async function resetOverride(dateStr, node) {
+        const { error } = await dbCall(client.from('capacity_overrides').delete().eq('date', dateStr), "Reset capacity");
+        if (error) return;
+        await loadOverrides();
+        computeProjectStates(); renderDashboard(); renderToDo();
+        renderDayModalBody(dateStr, node);
     }
 
     function renderDashboard() {
@@ -586,7 +794,7 @@
 
         const todayTasks = masterTasks.filter(t => t.due_date === todayStr);
         const todayLoad = todayTasks.reduce((s,t) => s + t.duration, 0);
-        const todayLimit = settings[dayKeys[dayOfWeek(todayStr)] + '_limit'] || 45;
+        const todayLimit = dayLimit(todayStr);
         const remaining = Math.max(0, todayLimit - todayLoad);
         document.getElementById('todaySummary').innerText = `${todayTasks.length} action${todayTasks.length===1?'':'s'} today · ${remaining} min${remaining===1?'':'s'} left in the tank`;
 
@@ -597,14 +805,15 @@
             const dateStr = addDays(todayStr, i);
             const dow = dayOfWeek(dateStr);
             const load = masterTasks.filter(t => t.due_date === dateStr).reduce((s, t) => s + t.duration, 0);
-            const limit = settings[dayKeys[dow] + '_limit'] || 45;
+            const limit = dayLimit(dateStr);
             const pct = limit ? Math.min(100, (load / limit) * 100) : (load > 0 ? 100 : 0);
             const color = (load >= limit && limit > 0) ? 'var(--red)'
                 : pct >= 66 ? 'var(--orange)'
                 : load > 0 ? 'var(--green)'
                 : '';
             const fill = load > 0 ? `<div class="cap-fill" style="height:${pct}%; background:${color};"></div>` : '';
-            return `<div class="day-cap${i === 0 ? ' today' : ''}"><span class="lbl">${dayLabels[dow]}</span><div class="cap-bar">${fill}</div></div>`;
+            const cls = `day-cap${i === 0 ? ' today' : ''}${dateStr in capacityOverrides ? ' has-override' : ''}`;
+            return `<div class="${cls}" data-date="${dateStr}"><span class="lbl">${dayLabels[dow]}</span><div class="cap-bar">${fill}</div></div>`;
         }).join('');
 
         renderQueue();
@@ -646,11 +855,11 @@
             return `
             <div class="todo-item${stateRowClass(t.project_id)}">
                 <div class="imp-chip ${impClass}">${esc(t.importance)}</div>
-                <div style="flex:1;">
+                <div style="flex:1; min-width:0;">
                     <b>${esc(t.title)}</b>${stateBadge(t.project_id)}<br>
                     <small>${formatDate(t.due_date)} • ${t.duration}m</small>
                 </div>
-                <div style="display:flex; gap:5px; align-items:center;">
+                <div style="display:flex; gap:6px; align-items:center;">
                     <button class="btn-edit" style="color:var(--red)" data-id="${esc(t.id)}" data-act="delete">✕</button>
                     <button class="btn-edit" data-id="${esc(t.id)}" data-act="edit">✎</button>
                     <button class="btn-done" data-id="${esc(t.id)}" data-act="complete">✓</button>
@@ -661,7 +870,7 @@
 
     function renderArchived(tasks) {
         document.getElementById('archivedToDo').innerHTML = tasks.map(t =>
-            `<div class="todo-item completed-item"><div style="flex:1;"><strike>${esc(t.title)}</strike></div><button class="btn-edit" data-id="${esc(t.id)}" data-act="uncomplete">⟲</button></div>`
+            `<div class="todo-item completed-item"><div style="flex:1; min-width:0;"><strike>${esc(t.title)}</strike></div><button class="btn-edit" data-id="${esc(t.id)}" data-act="uncomplete">⟲</button></div>`
         ).join('');
     }
 
