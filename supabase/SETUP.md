@@ -53,6 +53,8 @@ This matches the permissive RLS pattern already used by `subtasks` and `user_set
 supabase functions deploy ai-capture
 supabase functions deploy ai-weekly-review
 supabase functions deploy ai-project-brain
+supabase functions deploy ai-reschedule
+supabase functions deploy ai-project-recovery
 ```
 
 ## 6. Test

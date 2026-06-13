@@ -167,9 +167,15 @@
             </div>
             <div id="weekBar" class="week-bar"></div>
             <div id="focusQueue"></div>
-            <div style="display:flex; justify-content:flex-end; margin-top:6px;">
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:6px;">
+                <button class="btn-bulk hidden" id="smartRescheduleBtn" onclick="smartReschedule()">🧠 Smart Reschedule</button>
                 <button class="btn-bulk" onclick="pushAllToday()">PUSH ALL TODAY →</button>
             </div>
+        </div>
+
+        <div class="card hidden" id="riskCard">
+            <span class="section-title" style="margin-top:0;">⚠️ Projects At Risk</span>
+            <div id="riskList"></div>
         </div>
 
         <span class="section-title">📋 Active ToDo List</span>
@@ -903,6 +909,18 @@
             return `<div class="${cls}" data-date="${dateStr}"><span class="lbl">${dayLabels[dow]}</span><div class="cap-bar">${zone}${fill}</div></div>`;
         }).join('');
 
+        document.getElementById('smartRescheduleBtn').classList.toggle('hidden',
+            !masterTasks.some(t => t.due_date < todayStr));
+
+        const atRisk = Object.entries(projectStates).filter(([,s]) => s === 'at-risk');
+        document.getElementById('riskCard').classList.toggle('hidden', atRisk.length === 0);
+        document.getElementById('riskList').innerHTML = atRisk.map(([pid]) => `
+            <div class="day-task">
+                <div style="flex:1; min-width:0;"><b>${esc(projectNames[pid])}</b></div>
+                <button class="btn-bulk" onclick="getRecoveryPlan('${pid}')">🧠 Recovery Plan</button>
+            </div>
+        `).join('');
+
         renderQueue();
     }
 
@@ -1063,6 +1081,28 @@
         }
     }
 
+    function buildCapacityPayload(excludeProjectId, windowEnd) {
+        const today = localDateStr();
+        const loadByDate = {};
+        for (const t of masterTasks) {
+            if (t.project_id === excludeProjectId) continue;
+            if (t.due_date >= today && t.due_date <= windowEnd) {
+                loadByDate[t.due_date] = (loadByDate[t.due_date] || 0) + t.duration;
+            }
+        }
+        const existingLoad = Object.entries(loadByDate).map(([date, minutes]) => ({ date, minutes }));
+
+        const overrides = Object.entries(capacityOverrides)
+            .filter(([date]) => date >= today && date <= windowEnd)
+            .map(([date, limit]) => ({ date, limit }));
+
+        const dayKeys = ['sun','mon','tue','wed','thu','fri','sat'];
+        const dayLimits = {};
+        dayKeys.forEach(d => dayLimits[d] = settings[`${d}_limit`] ?? 45);
+
+        return { today, dayLimits, existingLoad, overrides };
+    }
+
     async function generateSteps() {
         const goal = activeGoal.goal;
         const deadline = activeGoal.date;
@@ -1075,22 +1115,7 @@
         try {
             const today = localDateStr();
             const windowEnd = deadline < addDays(today, 90) ? deadline : addDays(today, 90);
-
-            const loadByDate = {};
-            for (const t of masterTasks) {
-                if (t.due_date >= today && t.due_date <= windowEnd) {
-                    loadByDate[t.due_date] = (loadByDate[t.due_date] || 0) + t.duration;
-                }
-            }
-            const existingLoad = Object.entries(loadByDate).map(([date, minutes]) => ({ date, minutes }));
-
-            const overrides = Object.entries(capacityOverrides)
-                .filter(([date]) => date >= today && date <= windowEnd)
-                .map(([date, limit]) => ({ date, limit }));
-
-            const dayKeys = ['sun','mon','tue','wed','thu','fri','sat'];
-            const dayLimits = {};
-            dayKeys.forEach(d => dayLimits[d] = settings[`${d}_limit`] ?? 45);
+            const { dayLimits, existingLoad, overrides } = buildCapacityPayload(null, windowEnd);
 
             const { data, error } = await client.functions.invoke('ai-project-brain', {
                 body: { goal, deadline, today, dayLimits, existingLoad, overrides }
@@ -1106,6 +1131,83 @@
         } finally {
             btn.disabled = false;
             btn.innerText = originalLabel;
+        }
+    }
+
+    async function applyMoves(moves) {
+        let count = 0, failed = 0;
+        for (const m of moves) {
+            const { error } = await client.from('subtasks').update({ due_date: m.due_date, updated_at: new Date().toISOString() }).eq('id', m.id);
+            if (error) { failed++; continue; }
+            const t = masterTasks.find(t => t.id == m.id);
+            if (t) t.due_date = m.due_date;
+            count++;
+        }
+        if (failed) uiAlert(`${count} task(s) rescheduled, ${failed} failed.`);
+        refresh();
+    }
+
+    async function smartReschedule() {
+        const btn = document.getElementById('smartRescheduleBtn');
+        const originalLabel = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "🧠 Thinking…";
+
+        try {
+            const today = localDateStr();
+            const tasks = masterTasks
+                .filter(t => t.due_date <= addDays(today, 7))
+                .slice(0, 30)
+                .map(t => ({ id: t.id, title: t.title, duration: t.duration, due_date: t.due_date, goal_deadline: t.goal_deadline || null, importance: t.importance }));
+
+            if (!tasks.length) return uiAlert("Nothing needs rescheduling right now.");
+
+            let windowEnd = addDays(today, 90);
+            for (const t of tasks) {
+                if (t.goal_deadline && t.goal_deadline < windowEnd) windowEnd = t.goal_deadline;
+            }
+            if (windowEnd < addDays(today, 14)) windowEnd = addDays(today, 14);
+            const { dayLimits, existingLoad, overrides } = buildCapacityPayload(null, windowEnd);
+
+            const { data, error } = await client.functions.invoke('ai-reschedule', {
+                body: { today, tasks, dayLimits, existingLoad, overrides }
+            });
+            if (error) return uiAlert("Smart reschedule failed: " + error.message);
+            if (!data?.moves?.length) return uiAlert("Nothing needs rescheduling right now.");
+
+            const ok = await uiConfirm(data.summary || `Reschedule ${data.moves.length} task(s)?`, { title: "Smart Reschedule", okLabel: "Apply" });
+            if (ok) await applyMoves(data.moves);
+        } catch (err) {
+            uiAlert("Smart reschedule failed: " + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = originalLabel;
+        }
+    }
+
+    async function getRecoveryPlan(projectId) {
+        const steps = masterTasks
+            .filter(t => t.project_id === projectId)
+            .map(t => ({ id: t.id, title: t.title, duration: t.duration, due_date: t.due_date }));
+        if (!steps.length) return;
+
+        const goal = projectNames[projectId] || 'Project';
+        const deadline = masterTasks.find(t => t.project_id === projectId)?.goal_deadline;
+        const today = localDateStr();
+        const windowEnd = deadline && deadline < addDays(today, 90) ? deadline : addDays(today, 90);
+        const { dayLimits, existingLoad, overrides } = buildCapacityPayload(projectId, windowEnd);
+
+        try {
+            const { data, error } = await client.functions.invoke('ai-project-recovery', {
+                body: { goal, deadline, today, steps, dayLimits, existingLoad, overrides }
+            });
+            if (error) return uiAlert("Recovery plan failed: " + error.message);
+            if (!data?.moves?.length) return uiAlert(data?.summary || "AI couldn't find a way to recover this project's schedule.");
+
+            const ok = await uiConfirm(data.summary || `Reschedule ${data.moves.length} step(s)?`, { title: "Recovery plan for " + goal, okLabel: "Apply" });
+            if (ok) await applyMoves(data.moves);
+        } catch (err) {
+            uiAlert("Recovery plan failed: " + err.message);
         }
     }
 
