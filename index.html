@@ -81,7 +81,8 @@
         .btn-bulk { background: var(--teal); color: var(--ink); border: 2.5px solid var(--ink); font-size: 0.62rem; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: 900; box-shadow: 2px 2px 0 var(--ink); letter-spacing: 0.5px; }
 
         input, select { width: 100%; height: 50px; padding: 0 14px; border-radius: 12px; border: 3px solid var(--ink); font-size: 16px; margin-bottom: 12px; outline: none; background: white; font-family: inherit; font-weight: 700; }
-        input:focus, select:focus { box-shadow: 3px 3px 0 var(--teal); }
+        textarea { width: 100%; padding: 12px 14px; border-radius: 12px; border: 3px solid var(--ink); font-size: 16px; margin-bottom: 12px; outline: none; background: white; font-family: inherit; font-weight: 700; resize: vertical; }
+        input:focus, select:focus, textarea:focus { box-shadow: 3px 3px 0 var(--teal); }
         .submit-btn { background: var(--blue); color: white; width: 100%; height: 54px; border-radius: 14px; font-weight: 900; font-size: 1rem; border: 3px solid var(--ink); cursor: pointer; box-shadow: var(--shadow); font-family: inherit; letter-spacing: 0.5px; }
         .staged-item { background: var(--bg); padding: 10px 12px; border-radius: 10px; margin-bottom: 8px; font-size: 0.8rem; border: 2px solid var(--ink); font-weight: 700; cursor: grab; }
         .field-label { font-size: 0.62rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -159,6 +160,8 @@
             </div>
         </div>
 
+        <div id="weeklyReviewCard"></div>
+
         <span class="section-title">📋 Active ToDo List</span>
         <div id="masterToDo"></div>
         <span class="section-title">✅ Recently Completed</span>
@@ -172,6 +175,7 @@
         <div class="card" id="goalCapture">
             <a class="recur-link" onclick="toggleRecurrence()">⚡ Reoccurring: <span id="recurLabel">Never</span></a>
             <span class="section-title" style="margin-top:0;">🎯 Project Goal</span>
+
             <input id="mainGoal" placeholder="Project Name">
             <div><label class="field-label">Deadline</label><input type="date" id="goalDate"></div>
             <div>
@@ -193,6 +197,11 @@
                     <option value="Annually">Annually</option>
                 </select>
             </div>
+
+            <label class="field-label" style="margin-top:10px; display:block;">✨ Describe it (optional)</label>
+            <textarea id="nlCapture" rows="2" placeholder="e.g. service the car sometime next month, not urgent"></textarea>
+            <button type="button" class="btn-bulk" id="aiCaptureBtn" onclick="aiCapture()" style="margin-bottom:14px;">✨ Auto-fill with AI</button>
+
             <button class="submit-btn" style="margin-top:10px;" onclick="lockGoal()">Breakdown Actions →</button>
         </div>
 
@@ -317,6 +326,11 @@
         return dt.toISOString().split('T')[0];
     };
     const dayOfWeek = (dateStr) => parseDateUTC(dateStr).getUTCDay();
+    const getWeekStart = (dateStr) => {
+        const dow = dayOfWeek(dateStr); // 0 = Sunday
+        const offsetToMonday = dow === 0 ? -6 : 1 - dow;
+        return addDays(dateStr, offsetToMonday);
+    };
 
     const RECUR_OFFSETS = {
         Daily: { d: 1 }, Weekly: { d: 7 }, Fortnightly: { d: 14 },
@@ -437,6 +451,7 @@
         renderDashboard();
         renderToDo();
         renderArchived(completed || []);
+        loadWeeklyReview();
     }
 
     async function computeStreak() {
@@ -883,6 +898,71 @@
 
     function toggleRecurrence() {
         document.getElementById('recurrencePicker').classList.toggle('hidden');
+    }
+
+    async function loadWeeklyReview() {
+        const card = document.getElementById('weeklyReviewCard');
+        try {
+            const weekStart = getWeekStart(localDateStr());
+            const { data: cached } = await client.from('weekly_reviews').select('summary').eq('week_start', weekStart).maybeSingle();
+            if (cached) return renderWeeklyReview(cached.summary);
+
+            const completedCount = (await client.from('subtasks').select('id', { count: 'exact', head: true }).eq('completed', true).gte('updated_at', weekStart)).count || 0;
+            const activeCount = masterTasks.length;
+            const states = Object.values(projectStates);
+            const overdueCount = states.filter(s => s === 'overdue').length;
+            const atRiskCount = states.filter(s => s === 'at-risk').length;
+
+            if (completedCount === 0 && activeCount === 0) return;
+
+            const weekEnd = addDays(weekStart, 6);
+            const { data, error } = await client.functions.invoke('ai-weekly-review', {
+                body: { completedCount, overdueCount, atRiskCount, activeCount, weekStart, weekEnd }
+            });
+            if (error || !data?.summary) return;
+
+            await client.from('weekly_reviews').upsert({ week_start: weekStart, summary: data.summary });
+            renderWeeklyReview(data.summary);
+        } catch {
+            card.innerHTML = '';
+        }
+    }
+
+    function renderWeeklyReview(summary) {
+        document.getElementById('weeklyReviewCard').innerHTML = `
+            <div class="focus-card">
+                <span class="focus-eyebrow">📊 Your Week</span>
+                <div class="focus-meta" style="margin-top:10px; margin-bottom:0; opacity:0.85; font-size:0.85rem;">${esc(summary)}</div>
+            </div>`;
+    }
+
+    async function aiCapture() {
+        const text = document.getElementById('nlCapture').value.trim();
+        if (!text) return alert("Describe your project first");
+
+        const btn = document.getElementById('aiCaptureBtn');
+        const originalLabel = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "✨ Thinking…";
+
+        try {
+            const { data, error } = await client.functions.invoke('ai-capture', { body: { text, today: localDateStr() } });
+            if (error) return alert("AI capture failed: " + error.message);
+
+            if (data.title) document.getElementById('mainGoal').value = data.title;
+            if (data.deadline && data.deadline >= localDateStr()) document.getElementById('goalDate').value = data.deadline;
+            if (data.importance) setMainImp(data.importance);
+            if (data.recurrence && VALID_RULES.includes(data.recurrence)) {
+                document.getElementById('recurRule').value = data.recurrence;
+                document.getElementById('recurLabel').innerText = data.recurrence;
+                document.getElementById('recurrencePicker').classList.remove('hidden');
+            }
+        } catch (err) {
+            alert("AI capture failed: " + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = originalLabel;
+        }
     }
 
     function populateSettingsForm() {
