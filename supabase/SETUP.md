@@ -52,6 +52,7 @@ This matches the permissive RLS pattern already used by `subtasks` and `user_set
 ```powershell
 supabase functions deploy ai-capture
 supabase functions deploy ai-weekly-review
+supabase functions deploy ai-project-brain
 ```
 
 ## 6. Test

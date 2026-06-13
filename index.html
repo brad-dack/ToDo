@@ -204,6 +204,7 @@
             <button type="button" class="btn-bulk" id="aiCaptureBtn" onclick="aiCapture()" style="margin-bottom:14px;">✨ Auto-fill with AI</button>
 
             <button class="submit-btn" style="margin-top:10px;" onclick="lockGoal()">Breakdown Actions →</button>
+            <button class="submit-btn" style="margin-top:10px; background:var(--teal);" id="smartBreakdownBtn" onclick="smartBreakdown()">🧠 Smart Breakdown with AI</button>
         </div>
 
         <div class="card hidden" id="planningArea" style="background:#e0f7f5;">
@@ -979,6 +980,69 @@
             }
         } catch (err) {
             alert("AI capture failed: " + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = originalLabel;
+        }
+    }
+
+    function scheduleStagedSteps(steps, deadline) {
+        const today = localDateStr();
+        for (const step of steps) {
+            let d = step.due_date && step.due_date >= today ? step.due_date : today;
+            if (d > deadline) d = deadline;
+            while (true) {
+                const stagedLoad = stagingTasks.filter(t => t.due_date === d).reduce((s,t) => s + t.duration, 0);
+                if (hasCapacity(d, step.duration + stagedLoad) || d >= deadline) break;
+                d = addDays(d, 1);
+            }
+            stagingTasks.push({ title: step.title, duration: Math.min(15, Math.max(1, parseInt(step.duration) || 15)), due_date: d });
+        }
+    }
+
+    async function smartBreakdown() {
+        const goal = document.getElementById('mainGoal').value.trim();
+        const deadline = document.getElementById('goalDate').value;
+        if (!goal || !deadline) return uiAlert("Goal Name & Deadline required");
+        if (deadline < localDateStr()) return uiAlert("Deadline cannot be in the past");
+
+        const btn = document.getElementById('smartBreakdownBtn');
+        const originalLabel = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "🧠 Thinking…";
+
+        try {
+            const today = localDateStr();
+            const windowEnd = deadline < addDays(today, 90) ? deadline : addDays(today, 90);
+
+            const loadByDate = {};
+            for (const t of masterTasks) {
+                if (t.due_date >= today && t.due_date <= windowEnd) {
+                    loadByDate[t.due_date] = (loadByDate[t.due_date] || 0) + t.duration;
+                }
+            }
+            const existingLoad = Object.entries(loadByDate).map(([date, minutes]) => ({ date, minutes }));
+
+            const overrides = Object.entries(capacityOverrides)
+                .filter(([date]) => date >= today && date <= windowEnd)
+                .map(([date, limit]) => ({ date, limit }));
+
+            const dayKeys = ['sun','mon','tue','wed','thu','fri','sat'];
+            const dayLimits = {};
+            dayKeys.forEach(d => dayLimits[d] = settings[`${d}_limit`] ?? 45);
+
+            const { data, error } = await client.functions.invoke('ai-project-brain', {
+                body: { goal, deadline, today, dayLimits, existingLoad, overrides }
+            });
+            if (error) return uiAlert("Smart breakdown failed: " + error.message);
+            if (!data?.steps?.length) return uiAlert("AI couldn't come up with any steps - try a more specific goal.");
+
+            if (data.importance) setMainImp(data.importance);
+            lockGoal();
+            scheduleStagedSteps(data.steps, deadline);
+            renderStaging();
+        } catch (err) {
+            uiAlert("Smart breakdown failed: " + err.message);
         } finally {
             btn.disabled = false;
             btn.innerText = originalLabel;
