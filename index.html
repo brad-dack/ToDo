@@ -29,8 +29,10 @@
         .day-cap .lbl { background: white; border: 2px solid var(--ink); border-radius: 8px; padding: 3px 0; display: block; margin-bottom: 4px; }
         .day-cap.today .lbl { background: var(--ink); color: var(--yellow); }
         .day-cap.has-override .lbl { border-color: var(--teal); box-shadow: 0 0 0 1.5px var(--teal); }
-        .cap-bar { height: 38px; width: 100%; border-radius: 8px; background: white; border: 2px solid var(--ink); position: relative; overflow: hidden; }
-        .cap-fill { position: absolute; bottom: 0; left: 0; width: 100%; border-top: 2px solid var(--ink); }
+        .cap-bar { height: 52px; width: 100%; border-radius: 8px; background: white; border: 2px solid var(--ink); position: relative; overflow: hidden; }
+        .cap-zone { position: absolute; bottom: 0; left: 0; width: 100%; background: #2f2f2f; }
+        .cap-grad { position: absolute; left: 0; width: 100%; background: linear-gradient(to top, #ffe08a, #6a5ae0); }
+        .cap-cover { position: absolute; left: 0; width: 100%; background: white; }
 
         /* Up Next queue */
         .focus-card { background: white; border: 3px solid var(--ink); border-radius: 14px; padding: 16px; box-shadow: var(--shadow); margin-bottom: 12px; }
@@ -160,9 +162,8 @@
             </div>
         </div>
 
-        <div id="weeklyReviewCard"></div>
-
         <span class="section-title">📋 Active ToDo List</span>
+        <input id="todoSearch" placeholder="🔎 Search active tasks…" oninput="renderToDo()" style="margin-bottom:12px;">
         <div id="masterToDo"></div>
         <span class="section-title">✅ Recently Completed</span>
         <div id="archivedToDo"></div>
@@ -198,7 +199,7 @@
                 </select>
             </div>
 
-            <label class="field-label" style="margin-top:10px; display:block;">✨ Describe it (optional)</label>
+            <label class="field-label" style="margin-top:10px; display:block;">✨ Describe it (optional). Let AI work it out for you! Include deadline and importance in your text.</label>
             <textarea id="nlCapture" rows="2" placeholder="e.g. service the car sometime next month, not urgent"></textarea>
             <button type="button" class="btn-bulk" id="aiCaptureBtn" onclick="aiCapture()" style="margin-bottom:14px;">✨ Auto-fill with AI</button>
 
@@ -820,14 +821,21 @@
             const dow = dayOfWeek(dateStr);
             const load = masterTasks.filter(t => t.due_date === dateStr).reduce((s, t) => s + t.duration, 0);
             const limit = dayLimit(dateStr);
-            const pct = limit ? Math.min(100, (load / limit) * 100) : (load > 0 ? 100 : 0);
-            const color = (load >= limit && limit > 0) ? 'var(--red)'
-                : pct >= 66 ? 'var(--orange)'
-                : load > 0 ? 'var(--green)'
-                : '';
-            const fill = load > 0 ? `<div class="cap-fill" style="height:${pct}%; background:${color};"></div>` : '';
+            // 960 awake mins/day. A capacity minute is "worth" 5x a non-capacity minute,
+            // so the dark grey (life) and white/colour (capacity) zones split accordingly.
+            const AWAKE_MINS = 960, WEIGHT = 10;
+            const capPortion = limit > 0 ? (limit * WEIGHT) / (limit * WEIGHT + (AWAKE_MINS - limit)) : 0;
+            const greyPct = (1 - capPortion) * 100;
+            const zonePct = capPortion * 100;
+            const loadFrac = limit ? Math.min(1, load / limit) : 0;
+            const fillPct = zonePct * loadFrac;
+            const coverPct = zonePct - fillPct;
+            const zone = `<div class="cap-zone" style="height:${greyPct}%;"></div>`;
+            const grad = zonePct > 0 ? `<div class="cap-grad" style="height:${zonePct}%; bottom:${greyPct}%;"></div>` : '';
+            const cover = coverPct > 0 ? `<div class="cap-cover" style="height:${coverPct}%; bottom:${greyPct + fillPct}%;"></div>` : '';
+            const fill = grad + cover;
             const cls = `day-cap${i === 0 ? ' today' : ''}${dateStr in capacityOverrides ? ' has-override' : ''}`;
-            return `<div class="${cls}" data-date="${dateStr}"><span class="lbl">${dayLabels[dow]}</span><div class="cap-bar">${fill}</div></div>`;
+            return `<div class="${cls}" data-date="${dateStr}"><span class="lbl">${dayLabels[dow]}</span><div class="cap-bar">${zone}${fill}</div></div>`;
         }).join('');
 
         renderQueue();
@@ -864,7 +872,13 @@
     }
 
     function renderToDo() {
-        document.getElementById('masterToDo').innerHTML = masterTasks.map(t => {
+        const query = (document.getElementById('todoSearch')?.value || '').trim().toLowerCase();
+        const tasks = query ? masterTasks.filter(t => t.title.toLowerCase().includes(query)) : masterTasks;
+        if (query && tasks.length === 0) {
+            document.getElementById('masterToDo').innerHTML = `<p style="opacity:0.6; font-weight:700; text-align:center;">No matches for "${esc(query)}"</p>`;
+            return;
+        }
+        document.getElementById('masterToDo').innerHTML = tasks.map(t => {
             const impClass = `imp-${Math.min(10, Math.max(1, parseInt(t.importance) || 1))}`;
             return `
             <div class="todo-item${stateRowClass(t.project_id)}">
@@ -900,40 +914,46 @@
         document.getElementById('recurrencePicker').classList.toggle('hidden');
     }
 
+    /* One-time Monday-morning popup summarising last week. Shown at most once per week,
+       tracked locally so it doesn't linger as stale info on the dashboard. */
     async function loadWeeklyReview() {
-        const card = document.getElementById('weeklyReviewCard');
         try {
+            if (dayOfWeek(localDateStr()) !== 1) return; // 1 = Monday
+
             const weekStart = getWeekStart(localDateStr());
+            if (localStorage.getItem('weeklyReviewShown') === weekStart) return;
+
             const { data: cached } = await client.from('weekly_reviews').select('summary').eq('week_start', weekStart).maybeSingle();
-            if (cached) return renderWeeklyReview(cached.summary);
+            let summary = cached?.summary;
 
-            const completedCount = (await client.from('subtasks').select('id', { count: 'exact', head: true }).eq('completed', true).gte('updated_at', weekStart)).count || 0;
-            const activeCount = masterTasks.length;
-            const states = Object.values(projectStates);
-            const overdueCount = states.filter(s => s === 'overdue').length;
-            const atRiskCount = states.filter(s => s === 'at-risk').length;
+            if (!summary) {
+                const prevWeekStart = addDays(weekStart, -7);
+                const completedCount = (await client.from('subtasks').select('id', { count: 'exact', head: true }).eq('completed', true).gte('updated_at', prevWeekStart).lt('updated_at', weekStart)).count || 0;
+                const activeCount = masterTasks.length;
+                const states = Object.values(projectStates);
+                const overdueCount = states.filter(s => s === 'overdue').length;
+                const atRiskCount = states.filter(s => s === 'at-risk').length;
 
-            if (completedCount === 0 && activeCount === 0) return;
+                if (completedCount === 0 && activeCount === 0) { localStorage.setItem('weeklyReviewShown', weekStart); return; }
 
-            const weekEnd = addDays(weekStart, 6);
-            const { data, error } = await client.functions.invoke('ai-weekly-review', {
-                body: { completedCount, overdueCount, atRiskCount, activeCount, weekStart, weekEnd }
-            });
-            if (error || !data?.summary) return;
+                const { data, error } = await client.functions.invoke('ai-weekly-review', {
+                    body: { completedCount, overdueCount, atRiskCount, activeCount, weekStart: prevWeekStart, weekEnd: addDays(prevWeekStart, 6) }
+                });
+                if (error || !data?.summary) return;
 
-            await client.from('weekly_reviews').upsert({ week_start: weekStart, summary: data.summary });
-            renderWeeklyReview(data.summary);
-        } catch {
-            card.innerHTML = '';
-        }
-    }
+                summary = data.summary;
+                await client.from('weekly_reviews').upsert({ week_start: weekStart, summary });
+            }
 
-    function renderWeeklyReview(summary) {
-        document.getElementById('weeklyReviewCard').innerHTML = `
-            <div class="focus-card">
-                <span class="focus-eyebrow">📊 Your Week</span>
-                <div class="focus-meta" style="margin-top:10px; margin-bottom:0; opacity:0.85; font-size:0.85rem;">${esc(summary)}</div>
-            </div>`;
+            const node = document.createElement('div');
+            node.innerHTML = `
+                <h3 class="modal-title">📊 Your Week</h3>
+                <p class="modal-msg">${esc(summary)}</p>
+                <div class="modal-actions"><button class="submit-btn" style="flex:1;">Got it</button></div>`;
+            const m = openModal(node, { dismissable: false });
+            node.querySelector('.submit-btn').onclick = m.close;
+            localStorage.setItem('weeklyReviewShown', weekStart);
+        } catch {}
     }
 
     async function aiCapture() {
