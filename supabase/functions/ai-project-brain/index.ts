@@ -29,6 +29,8 @@ Deno.serve(async (req) => {
         `scheduled for that date). Don't schedule more steps onto a date than its remaining capacity allows. ` +
         `\n\nAlso rate the project's importance from 1 (trivial) to 10 (critical) based on the goal's wording ` +
         `and how tight the deadline is.` +
+        `\n\nConsolidate related actions into a small number of meaningful steps - aim for 4-8 steps total ` +
+        `for the whole project, not an exhaustive micro-breakdown of every individual action.` +
         `\n\ndayLimits: ${JSON.stringify(dayLimits)}` +
         `\nexistingLoad: ${JSON.stringify(existingLoad)}` +
         `\noverrides: ${JSON.stringify(overrides)}`,
@@ -43,7 +45,7 @@ Deno.serve(async (req) => {
             steps: {
               type: "array",
               minItems: 1,
-              maxItems: 20,
+              maxItems: 8,
               items: {
                 type: "object",
                 properties: {

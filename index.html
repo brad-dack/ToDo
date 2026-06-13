@@ -82,11 +82,17 @@
         .btn-edit:active { transform: translate(2px,2px); box-shadow: none; }
         .btn-bulk { background: var(--teal); color: var(--ink); border: 2.5px solid var(--ink); font-size: 0.62rem; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: 900; box-shadow: 2px 2px 0 var(--ink); letter-spacing: 0.5px; }
 
-        input, select { width: 100%; height: 50px; padding: 0 14px; border-radius: 12px; border: 3px solid var(--ink); font-size: 16px; margin-bottom: 12px; outline: none; background: white; font-family: inherit; font-weight: 700; }
-        textarea { width: 100%; padding: 12px 14px; border-radius: 12px; border: 3px solid var(--ink); font-size: 16px; margin-bottom: 12px; outline: none; background: white; font-family: inherit; font-weight: 700; resize: vertical; }
+        input, select { width: 100%; height: 50px; padding: 0 14px; border-radius: 12px; border: 3px solid var(--ink); font-size: 16px; margin-bottom: 12px; outline: none; background: white; font-family: inherit; font-weight: 700; box-sizing: border-box; min-width: 0; }
+        textarea { width: 100%; padding: 12px 14px; border-radius: 12px; border: 3px solid var(--ink); font-size: 16px; margin-bottom: 12px; outline: none; background: white; font-family: inherit; font-weight: 700; resize: vertical; box-sizing: border-box; }
         input:focus, select:focus, textarea:focus { box-shadow: 3px 3px 0 var(--teal); }
+        input[type="date"] { min-width: 0; max-width: 100%; }
         .submit-btn { background: var(--blue); color: white; width: 100%; height: 54px; border-radius: 14px; font-weight: 900; font-size: 1rem; border: 3px solid var(--ink); cursor: pointer; box-shadow: var(--shadow); font-family: inherit; letter-spacing: 0.5px; }
-        .staged-item { background: var(--bg); padding: 10px 12px; border-radius: 10px; margin-bottom: 8px; font-size: 0.8rem; border: 2px solid var(--ink); font-weight: 700; cursor: grab; }
+        .staged-item-wrap { position: relative; overflow: hidden; border-radius: 10px; margin-bottom: 8px; }
+        .staged-item-wrap .delete-bg { position: absolute; inset: 0; background: var(--red); display: flex; align-items: center; justify-content: flex-end; padding-right: 16px; color: #fff; font-weight: 900; }
+        .staged-item { background: var(--bg); padding: 10px 12px; border-radius: 10px; font-size: 0.8rem; border: 2px solid var(--ink); font-weight: 700; display: flex; align-items: center; gap: 8px; touch-action: pan-y; transition: transform 0.15s; position: relative; }
+        .staged-item .drag-handle { cursor: grab; }
+        .staged-item .staged-body { flex: 1; min-width: 0; }
+        .staged-item .staged-delete { border: none; background: none; font-weight: 900; cursor: pointer; padding: 4px; font-size: 1rem; flex-shrink: 0; }
         .field-label { font-size: 0.62rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; }
         .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
         .page-header h2 { margin: 4px 0 18px; font-size: 1.5rem; font-weight: 900; }
@@ -181,6 +187,13 @@
             <a class="recur-link" onclick="toggleRecurrence()">⚡ Reoccurring: <span id="recurLabel">Never</span></a>
             <span class="section-title" style="margin-top:0;">🎯 Project Goal</span>
 
+            <div style="background:#fff8e1; border:2px solid var(--ink); border-radius:12px; padding:12px; margin-bottom:14px;">
+                <button type="button" class="btn-bulk" id="aiCaptureBtn" onclick="aiCapture()" style="margin-bottom:10px;">✨ Auto-fill with AI</button>
+                <label class="field-label" style="display:block;">Describe it. Let AI work it out for you! Include deadline and importance in your text.</label>
+                <textarea id="nlCapture" rows="2" placeholder="e.g. service the car sometime next month, not urgent" style="margin-bottom:0;"></textarea>
+            </div>
+
+            <span class="field-label">Manual entry</span>
             <input id="mainGoal" placeholder="Project Name">
             <div><label class="field-label">Deadline</label><input type="date" id="goalDate"></div>
             <div>
@@ -203,16 +216,12 @@
                 </select>
             </div>
 
-            <label class="field-label" style="margin-top:10px; display:block;">✨ Describe it (optional). Let AI work it out for you! Include deadline and importance in your text.</label>
-            <textarea id="nlCapture" rows="2" placeholder="e.g. service the car sometime next month, not urgent"></textarea>
-            <button type="button" class="btn-bulk" id="aiCaptureBtn" onclick="aiCapture()" style="margin-bottom:14px;">✨ Auto-fill with AI</button>
-
-            <button class="submit-btn" style="margin-top:10px;" onclick="lockGoal()">Breakdown Actions →</button>
-            <button class="submit-btn" style="margin-top:10px; background:var(--teal);" id="smartBreakdownBtn" onclick="smartBreakdown()">🧠 Smart Breakdown with AI</button>
+            <button class="submit-btn" style="margin-top:10px;" onclick="lockGoal()">Plan Steps →</button>
         </div>
 
         <div class="card hidden" id="planningArea" style="background:#e0f7f5;">
             <h3 id="displayGoal" style="margin:0 0 15px 0; font-size:1.05rem; font-weight:900;"></h3>
+            <button class="submit-btn" style="background:var(--teal); margin-bottom:14px;" id="generateStepsBtn" onclick="generateSteps()">🧠 Generate Steps with AI</button>
             <input id="stageTitle" placeholder="Action Title">
             <div style="display:flex; gap:12px;">
                 <div style="flex:0 0 35%; min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="stageMins" max="15" value="15"></div>
@@ -405,9 +414,11 @@
 
         new Sortable(document.getElementById('stagedList'), {
             animation: 150,
+            handle: '.drag-handle',
             onEnd: (evt) => {
                 const item = stagingTasks.splice(evt.oldIndex, 1)[0];
                 stagingTasks.splice(evt.newIndex, 0, item);
+                renderStaging();
             }
         });
 
@@ -565,9 +576,47 @@
     }
 
     function renderStaging() {
-        document.getElementById('stagedList').innerHTML = stagingTasks.map(t =>
-            `<div class="staged-item">☰ <b>${esc(t.title)}</b> (${t.duration}m) - ${formatDate(t.due_date)}</div>`
-        ).join('');
+        document.getElementById('stagedList').innerHTML = stagingTasks.map((t, i) => `
+            <div class="staged-item-wrap">
+                <div class="delete-bg">Delete</div>
+                <div class="staged-item" data-idx="${i}">
+                    <span class="drag-handle">☰</span>
+                    <span class="staged-body"><b>${esc(t.title)}</b> (${t.duration}m) - ${formatDate(t.due_date)}</span>
+                    <button class="staged-delete" onclick="removeStaged(${i})">✕</button>
+                </div>
+            </div>
+        `).join('');
+        attachSwipeHandlers();
+    }
+
+    function removeStaged(i) {
+        stagingTasks.splice(i, 1);
+        renderStaging();
+    }
+
+    function attachSwipeHandlers() {
+        document.querySelectorAll('#stagedList .staged-item').forEach(el => {
+            let startX = null, dx = 0;
+            el.addEventListener('pointerdown', e => { startX = e.clientX; el.style.transition = 'none'; });
+            el.addEventListener('pointermove', e => {
+                if (startX === null) return;
+                dx = Math.min(0, e.clientX - startX);
+                el.style.transform = `translateX(${dx}px)`;
+            });
+            const end = () => {
+                if (startX === null) return;
+                el.style.transition = 'transform 0.15s';
+                if (dx < -60) {
+                    el.style.transform = 'translateX(-100%)';
+                    el.addEventListener('transitionend', () => removeStaged(+el.dataset.idx), { once: true });
+                } else {
+                    el.style.transform = 'translateX(0)';
+                }
+                startX = null; dx = 0;
+            };
+            el.addEventListener('pointerup', end);
+            el.addEventListener('pointerleave', end);
+        });
     }
 
     async function finalisePlanning() {
@@ -1014,13 +1063,11 @@
         }
     }
 
-    async function smartBreakdown() {
-        const goal = document.getElementById('mainGoal').value.trim();
-        const deadline = document.getElementById('goalDate').value;
-        if (!goal || !deadline) return uiAlert("Goal Name & Deadline required");
-        if (deadline < localDateStr()) return uiAlert("Deadline cannot be in the past");
+    async function generateSteps() {
+        const goal = activeGoal.goal;
+        const deadline = activeGoal.date;
 
-        const btn = document.getElementById('smartBreakdownBtn');
+        const btn = document.getElementById('generateStepsBtn');
         const originalLabel = btn.innerText;
         btn.disabled = true;
         btn.innerText = "🧠 Thinking…";
@@ -1052,7 +1099,6 @@
             if (!data?.steps?.length) return uiAlert("AI couldn't come up with any steps - try a more specific goal.");
 
             if (data.importance) setMainImp(data.importance);
-            lockGoal();
             scheduleStagedSteps(data.steps, deadline);
             renderStaging();
         } catch (err) {
