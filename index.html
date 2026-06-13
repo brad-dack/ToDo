@@ -31,7 +31,7 @@
         .day-cap.has-override .lbl { border-color: var(--teal); box-shadow: 0 0 0 1.5px var(--teal); }
         .cap-bar { height: 52px; width: 100%; border-radius: 8px; background: white; border: 2px solid var(--ink); position: relative; overflow: hidden; }
         .cap-zone { position: absolute; bottom: 0; left: 0; width: 100%; background: #2f2f2f; }
-        .cap-grad { position: absolute; left: 0; width: 100%; background: linear-gradient(to top, #ffe08a, #6a5ae0); }
+        .cap-grad { position: absolute; left: 0; width: 100%; background: linear-gradient(to top, #8de8e0, #00897b); }
         .cap-cover { position: absolute; left: 0; width: 100%; background: white; }
 
         /* Up Next queue */
@@ -97,7 +97,9 @@
 
         /* ---- Themed modals ---- */
         .modal-overlay { position: fixed; inset: 0; background: rgba(26,26,26,0.55); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 18px; }
-        .modal-card { background: white; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 6px 6px 0 var(--ink); padding: 20px; width: 100%; max-width: 420px; max-height: 86vh; overflow-y: auto; }
+        .modal-card { background: white; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 6px 6px 0 var(--ink); padding: 20px; width: 100%; max-width: 420px; max-height: 86vh; overflow-y: auto; position: relative; }
+        .modal-close { position: absolute; top: 14px; right: 14px; width: 32px; height: 32px; border-radius: 9px; border: 2.5px solid var(--ink); background: white; font-weight: 900; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 2px 2px 0 var(--ink); z-index: 1; }
+        .modal-close:active { transform: translate(2px,2px); box-shadow: none; }
         .modal-title { margin: 0 0 14px; font-size: 1.2rem; font-weight: 900; }
         .modal-msg { font-size: 0.9rem; font-weight: 700; line-height: 1.5; margin: 0 0 4px; }
         .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
@@ -109,8 +111,10 @@
         .imp-pick-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 8px; border: 2.5px solid var(--ink); border-radius: 12px; background: white; cursor: pointer; font-family: inherit; font-size: 0.82rem; font-weight: 700; text-align: left; }
         .imp-pick-row:active { transform: translate(2px,2px); }
         .cap-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-        .cap-meter { flex: 1; height: 16px; background: var(--bg); border: 2.5px solid var(--ink); border-radius: 8px; overflow: hidden; }
-        .cap-meter-fill { height: 100%; }
+        .cap-meter { position: relative; flex: 1; height: 16px; background: white; border: 2.5px solid var(--ink); border-radius: 8px; overflow: hidden; }
+        .cap-meter-zone { position: absolute; left: 0; top: 0; height: 100%; background: #2f2f2f; }
+        .cap-meter-grad { position: absolute; top: 0; height: 100%; background: linear-gradient(to right, #8de8e0, #00897b); }
+        .cap-meter-cover { position: absolute; top: 0; right: 0; height: 100%; background: white; }
         .cap-label { font-size: 0.72rem; font-weight: 900; white-space: nowrap; }
         .cap-controls { background: var(--bg); border: 2px solid var(--ink); border-radius: 12px; padding: 12px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
         .qty-btn { background: white; border: 2.5px solid var(--ink); border-radius: 10px; height: 42px; font-weight: 900; font-family: inherit; cursor: pointer; box-shadow: 2px 2px 0 var(--ink); flex: 1; }
@@ -734,9 +738,13 @@
         const tasks = masterTasks.filter(t => t.due_date === dateStr).sort((a,b) => b.importance - a.importance);
         const load = tasks.reduce((s,t) => s + t.duration, 0);
         const limit = dayLimit(dateStr);
-        const pct = limit ? Math.min(100, (load / limit) * 100) : (load > 0 ? 100 : 0);
         const over = dateStr in capacityOverrides;
-        const color = (load >= limit && limit > 0) ? 'var(--red)' : pct >= 66 ? 'var(--orange)' : load > 0 ? 'var(--green)' : 'var(--green)';
+        const AWAKE_MINS = 960, WEIGHT = 10;
+        const capPortion = limit > 0 ? (limit * WEIGHT) / (limit * WEIGHT + (AWAKE_MINS - limit)) : 0;
+        const greyPct = (1 - capPortion) * 100;
+        const zonePct = capPortion * 100;
+        const loadFrac = limit ? Math.min(1, load / limit) : 0;
+        const fillPct = zonePct * loadFrac;
         const dObj = parseDateUTC(dateStr);
         let heading = new Intl.DateTimeFormat('en-AU', { weekday:'long', day:'numeric', month:'long', timeZone:'UTC' }).format(dObj);
         if (dateStr === localDateStr()) heading = 'Today · ' + heading;
@@ -754,9 +762,15 @@
         }).join('') : `<p class="modal-msg" style="text-align:center; opacity:0.6;">Nothing planned 🎉</p>`;
 
         node.innerHTML = `
+            <button class="modal-close dm-close-x">✕</button>
             <h3 class="modal-title">${esc(heading)}</h3>
             <div class="cap-row">
-                <div class="cap-meter"><div class="cap-meter-fill" style="width:${pct}%; background:${color};"></div></div>
+                <div class="cap-meter">
+                    <div class="cap-meter-zone" style="width:${greyPct}%;"></div>
+                    <div class="cap-meter-grad" style="left:${greyPct}%; width:${zonePct}%;">
+                        <div class="cap-meter-cover" style="width:${zonePct > 0 ? (zonePct - fillPct) / zonePct * 100 : 0}%;"></div>
+                    </div>
+                </div>
                 <span class="cap-label">${load} / ${limit}m</span>
             </div>
             <div class="cap-controls">
@@ -773,6 +787,7 @@
             <div class="modal-actions"><button class="submit-btn dm-close" style="background:var(--ink);">Close</button></div>`;
 
         node.querySelector('.dm-close').onclick = () => { const o = node.closest('.modal-overlay'); if (o) o.remove(); };
+        node.querySelector('.dm-close-x').onclick = () => { const o = node.closest('.modal-overlay'); if (o) o.remove(); };
         node.querySelector('.dm-minus').onclick = () => adjustOverride(dateStr, -15, node);
         node.querySelector('.dm-plus').onclick = () => adjustOverride(dateStr, 15, node);
         const reset = node.querySelector('.dm-reset');
@@ -866,8 +881,7 @@
         </div>`;
         [[second, '2ND'], [third, '3RD']].forEach(([t, label]) => {
             if (!t) return;
-            const s = splitTitle(t.title);
-            html += `<div class="queue-peek"><span class="queue-pos">${label}</span> ${esc(s.name)}${stateBadge(t.project_id)}<span class="qm">${t.duration}m</span></div>`;
+            html += `<div class="queue-peek"><span class="queue-pos">${label}</span><span style="flex:1; min-width:0;">${esc(t.title)}${stateBadge(t.project_id)}</span><span class="qm">${t.duration}m</span></div>`;
         });
         queue.innerHTML = html;
     }
