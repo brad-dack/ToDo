@@ -32,6 +32,7 @@ Deno.serve(async (req) => {
         `\n\nIf all steps genuinely cannot fit before ${deadline} given available capacity, schedule the ` +
         `overflow steps as close to ${deadline} as possible (do not invent dates after the deadline) and ` +
         `mention in the summary that the deadline may need to be extended. ` +
+        `\n\nKeep the summary brief and to the point - one short sentence, no preamble or step-by-step detail. ` +
         `\n\nReturn a move for every step (even ones whose due_date doesn't change), so the full plan is ` +
         `represented. ` +
         `\n\ndayLimits: ${JSON.stringify(dayLimits)}` +
@@ -44,7 +45,7 @@ Deno.serve(async (req) => {
         input_schema: {
           type: "object",
           properties: {
-            summary: { type: "string", description: "1-2 sentence plain-text explanation of the recovery approach" },
+            summary: { type: "string", description: "One short, plain-text sentence (max ~20 words) summarising the recovery approach. Be brief and to the point - no preamble." },
             moves: {
               type: "array",
               items: {

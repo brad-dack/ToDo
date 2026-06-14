@@ -86,6 +86,7 @@
         textarea { width: 100%; padding: 12px 14px; border-radius: 12px; border: 3px solid var(--ink); font-size: 16px; margin-bottom: 12px; outline: none; background: white; font-family: inherit; font-weight: 700; resize: vertical; box-sizing: border-box; }
         input:focus, select:focus, textarea:focus { box-shadow: 3px 3px 0 var(--teal); }
         input[type="date"] { min-width: 0; max-width: 200px; }
+        input[type="date"].full-date { max-width: none; }
         .submit-btn { background: var(--blue); color: white; width: 100%; height: 54px; border-radius: 14px; font-weight: 900; font-size: 1rem; border: 3px solid var(--ink); cursor: pointer; box-shadow: var(--shadow); font-family: inherit; letter-spacing: 0.5px; }
         .staged-item-wrap { position: relative; overflow: hidden; border-radius: 10px; margin-bottom: 8px; }
         .staged-item-wrap .delete-bg { position: absolute; inset: 0; background: var(--red); display: flex; align-items: center; justify-content: flex-end; padding-right: 16px; color: #fff; font-weight: 900; }
@@ -221,17 +222,19 @@
 
             <div style="background:#fff8e1; border:2px solid var(--ink); border-radius:12px; padding:12px; margin-bottom:14px;">
                 <button type="button" class="btn-bulk" id="aiCaptureBtn" onclick="aiCapture()" style="margin-bottom:10px;">✨ Auto-fill with AI</button>
-                <label class="field-label" style="display:block;">Describe it. Let AI work it out for you! Include deadline and importance in your text.</label>
-                <textarea id="nlCapture" rows="2" placeholder="e.g. service the car sometime next month, not urgent" style="margin-bottom:0;"></textarea>
+                <label class="field-label" style="display:block;">Describe it. Let AI work it out for you! Include deadline, importance, and a rough estimate of how long it'll take in your text.</label>
+                <textarea id="nlCapture" rows="2" placeholder="e.g. service the car sometime next month, not urgent, probably an hour or two" style="margin-bottom:0;"></textarea>
             </div>
 
-            <span class="field-label">Manual entry</span>
-            <input id="mainGoal" placeholder="Project Name">
-            <div><label class="field-label">Deadline</label><input type="date" id="goalDate"></div>
-            <div>
-                <label class="field-label">Importance</label>
-                <input type="hidden" id="mainImp" value="5">
-                <button type="button" class="imp-picker-btn" id="mainImpBtn" onclick="openImportancePicker(parseInt(document.getElementById('mainImp').value), setMainImp)"></button>
+            <div style="background:#e8f4ff; border:2px solid var(--ink); border-radius:12px; padding:12px; margin-bottom:14px;">
+                <span class="field-label" style="display:block; margin-bottom:8px;">Manual entry</span>
+                <div><label class="field-label">Project Name</label><input id="mainGoal" placeholder="Project Name"></div>
+                <div><label class="field-label">Deadline</label><input type="date" id="goalDate" class="full-date"></div>
+                <div style="margin-bottom:0;">
+                    <label class="field-label">Importance</label>
+                    <input type="hidden" id="mainImp" value="5">
+                    <button type="button" class="imp-picker-btn" id="mainImpBtn" style="margin-bottom:0;" onclick="openImportancePicker(parseInt(document.getElementById('mainImp').value), setMainImp)"></button>
+                </div>
             </div>
 
             <div id="recurrencePicker" class="hidden" style="margin-top:10px; padding:15px; background:var(--bg); border-radius:12px; border:2px solid var(--ink);">
@@ -261,9 +264,9 @@
             </div>
             <span class="field-label">Manual entry</span>
             <input id="stageTitle" placeholder="Action Title">
-            <div style="display:grid; grid-template-columns: 35% 1fr; gap:12px;">
+            <div style="display:grid; grid-template-columns: 35% 1fr; gap:12px; align-items:end;">
                 <div style="min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="stageMins" max="15" value="15"></div>
-                <div style="min-width:0;"><label class="field-label">Action Date</label><input type="date" id="stageDate"></div>
+                <div style="min-width:0;"><label class="field-label">Action Date</label><input type="date" id="stageDate" class="full-date"></div>
             </div>
             <button onclick="addToStaging()" style="background:var(--green); color:var(--ink); width:100%; height:50px; border-radius:12px; font-weight:900; margin-bottom:15px; border:3px solid var(--ink); cursor:pointer; box-shadow:var(--shadow); font-family:inherit;">+ Add to Sequence</button>
             <div id="stagedList" style="margin-bottom:15px;"></div>
@@ -811,8 +814,20 @@
         if (!t) return;
         const targetDateStr = addDays(t.due_date, 1);
 
-        if (t.goal_deadline && targetDateStr > t.goal_deadline) return uiAlert("Cannot push: Past project deadline!");
         if (!hasCapacity(targetDateStr, t.duration, t.id)) return uiAlert(`${formatDate(targetDateStr)} is already at capacity!`);
+
+        if (t.goal_deadline && targetDateStr > t.goal_deadline) {
+            const ok = await uiConfirm("Do you really want to do this - you set this date for a reason! Pushing this task will also push the project deadline back a day.", { title: "Past project deadline", okLabel: "Push anyway" });
+            if (!ok) return;
+
+            const newDeadline = addDays(t.goal_deadline, 1);
+            const { error } = await dbCall(client.from('subtasks').update({ due_date: targetDateStr, goal_deadline: newDeadline, updated_at: new Date().toISOString() }).eq('id', id), "Push");
+            if (error) return;
+            if (t.project_id) {
+                await dbCall(client.from('subtasks').update({ goal_deadline: newDeadline, updated_at: new Date().toISOString() }).eq('project_id', t.project_id).neq('id', id), "Push deadline");
+            }
+            return refresh();
+        }
 
         const { error } = await dbCall(client.from('subtasks').update({ due_date: targetDateStr, updated_at: new Date().toISOString() }).eq('id', id), "Push");
         if (!error) refresh();
@@ -1001,7 +1016,7 @@
         const load = tasks.reduce((s,t) => s + t.duration, 0);
         const limit = dayLimit(dateStr);
         const over = dateStr in capacityOverrides;
-        const AWAKE_MINS = 960, WEIGHT = 10;
+        const AWAKE_MINS = 960, WEIGHT = 7.5;
         const capPortion = limit > 0 ? (limit * WEIGHT) / (limit * WEIGHT + (AWAKE_MINS - limit)) : 0;
         const greyPct = (1 - capPortion) * 100;
         const zonePct = capPortion * 100;
@@ -1127,7 +1142,7 @@
             const limit = dayLimit(dateStr);
             // 960 awake mins/day. A capacity minute is "worth" 5x a non-capacity minute,
             // so the dark grey (life) and white/colour (capacity) zones split accordingly.
-            const AWAKE_MINS = 960, WEIGHT = 10;
+            const AWAKE_MINS = 960, WEIGHT = 7.5;
             const capPortion = limit > 0 ? (limit * WEIGHT) / (limit * WEIGHT + (AWAKE_MINS - limit)) : 0;
             const greyPct = (1 - capPortion) * 100;
             const zonePct = capPortion * 100;
@@ -1147,7 +1162,7 @@
         document.getElementById('riskList').innerHTML = atRisk.map(([pid]) => `
             <div class="day-task">
                 <div style="flex:1; min-width:0;"><b>${esc(projectNames[pid])}</b></div>
-                <button class="btn-bulk" onclick="getRecoveryPlan('${pid}')">🧠 Recovery Plan</button>
+                <button class="btn-bulk" onclick="getRecoveryPlan('${pid}', this)">🧠 Recovery Plan</button>
             </div>
         `).join('');
 
@@ -1434,7 +1449,7 @@
         }
     }
 
-    async function getRecoveryPlan(projectId) {
+    async function getRecoveryPlan(projectId, btn) {
         const steps = masterTasks
             .filter(t => t.project_id === projectId)
             .map(t => ({ id: t.id, title: t.title, duration: t.duration, due_date: t.due_date }));
@@ -1445,6 +1460,9 @@
         const today = localDateStr();
         const windowEnd = deadline && deadline < addDays(today, 90) ? deadline : addDays(today, 90);
         const { dayLimits, existingLoad, overrides } = buildCapacityPayload(projectId, windowEnd);
+
+        const originalLabel = btn?.innerText;
+        if (btn) { btn.disabled = true; btn.innerText = '🧠 Thinking…'; }
 
         try {
             const { data, error } = await client.functions.invoke('ai-project-recovery', {
@@ -1457,6 +1475,8 @@
             if (ok) await applyMoves(data.moves);
         } catch (err) {
             uiAlert("Recovery plan failed: " + err.message);
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerText = originalLabel; }
         }
     }
 

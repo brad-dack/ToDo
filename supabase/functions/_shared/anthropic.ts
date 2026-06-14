@@ -53,6 +53,9 @@ export async function callClaudeForJSON(opts: CallClaudeOptions): Promise<Record
   }
 
   const data = await res.json();
+  if (data.usage) {
+    console.log(`[claude usage] model=${opts.model} tool=${opts.tool.name} input_tokens=${data.usage.input_tokens} output_tokens=${data.usage.output_tokens}`);
+  }
   const toolUse = (data.content || []).find((b: { type: string }) => b.type === "tool_use");
   if (!toolUse) throw new Error("Claude did not return a tool call");
   return toolUse.input as Record<string, unknown>;
