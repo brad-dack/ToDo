@@ -84,6 +84,7 @@
 
         input, select { width: 100%; height: 50px; padding: 0 14px; border-radius: 12px; border: 3px solid var(--ink); font-size: 16px; margin-bottom: 12px; outline: none; background: white; font-family: inherit; font-weight: 700; box-sizing: border-box; min-width: 0; }
         textarea { width: 100%; padding: 12px 14px; border-radius: 12px; border: 3px solid var(--ink); font-size: 16px; margin-bottom: 12px; outline: none; background: white; font-family: inherit; font-weight: 700; resize: vertical; box-sizing: border-box; }
+        textarea::placeholder { font-size: 0.8rem; font-weight: 600; }
         input:focus, select:focus, textarea:focus { box-shadow: 3px 3px 0 var(--teal); }
         input[type="date"] { min-width: 0; max-width: 200px; }
         input[type="date"].full-date { max-width: none; }
@@ -229,7 +230,7 @@
             <div style="background:#e8f4ff; border:2px solid var(--ink); border-radius:12px; padding:12px; margin-bottom:14px;">
                 <span class="field-label" style="display:block; margin-bottom:8px;">Manual entry</span>
                 <div><label class="field-label">Project Name</label><input id="mainGoal" placeholder="Project Name"></div>
-                <div><label class="field-label">Deadline</label><input type="date" id="goalDate" class="full-date"></div>
+                <div><label class="field-label">Deadline</label><input type="date" id="goalDate"></div>
                 <div style="margin-bottom:0;">
                     <label class="field-label">Importance</label>
                     <input type="hidden" id="mainImp" value="5">
@@ -266,7 +267,7 @@
             <input id="stageTitle" placeholder="Action Title">
             <div style="display:grid; grid-template-columns: 35% 1fr; gap:12px; align-items:end;">
                 <div style="min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="stageMins" max="15" value="15"></div>
-                <div style="min-width:0;"><label class="field-label">Action Date</label><input type="date" id="stageDate" class="full-date"></div>
+                <div style="min-width:0;"><label class="field-label">Action Date</label><input type="date" id="stageDate"></div>
             </div>
             <button onclick="addToStaging()" style="background:var(--green); color:var(--ink); width:100%; height:50px; border-radius:12px; font-weight:900; margin-bottom:15px; border:3px solid var(--ink); cursor:pointer; box-shadow:var(--shadow); font-family:inherit;">+ Add to Sequence</button>
             <div id="stagedList" style="margin-bottom:15px;"></div>
@@ -577,6 +578,7 @@
     }
 
     let projectStates = {}, projectNames = {};
+    const recoveryAttempted = new Set();
 
     async function refresh() {
         await loadOverrides();
@@ -1016,7 +1018,7 @@
         const load = tasks.reduce((s,t) => s + t.duration, 0);
         const limit = dayLimit(dateStr);
         const over = dateStr in capacityOverrides;
-        const AWAKE_MINS = 960, WEIGHT = 7.5;
+        const AWAKE_MINS = 960, WEIGHT = 12.5;
         const capPortion = limit > 0 ? (limit * WEIGHT) / (limit * WEIGHT + (AWAKE_MINS - limit)) : 0;
         const greyPct = (1 - capPortion) * 100;
         const zonePct = capPortion * 100;
@@ -1142,7 +1144,7 @@
             const limit = dayLimit(dateStr);
             // 960 awake mins/day. A capacity minute is "worth" 5x a non-capacity minute,
             // so the dark grey (life) and white/colour (capacity) zones split accordingly.
-            const AWAKE_MINS = 960, WEIGHT = 7.5;
+            const AWAKE_MINS = 960, WEIGHT = 12.5;
             const capPortion = limit > 0 ? (limit * WEIGHT) / (limit * WEIGHT + (AWAKE_MINS - limit)) : 0;
             const greyPct = (1 - capPortion) * 100;
             const zonePct = capPortion * 100;
@@ -1160,9 +1162,11 @@
         const atRisk = Object.entries(projectStates).filter(([,s]) => s === 'at-risk');
         document.getElementById('riskCard').classList.toggle('hidden', atRisk.length === 0);
         document.getElementById('riskList').innerHTML = atRisk.map(([pid]) => `
-            <div class="day-task">
+            <div class="day-task" style="flex-wrap:wrap;">
                 <div style="flex:1; min-width:0;"><b>${esc(projectNames[pid])}</b></div>
-                <button class="btn-bulk" onclick="getRecoveryPlan('${pid}', this)">🧠 Recovery Plan</button>
+                ${recoveryAttempted.has(pid)
+                    ? `<small style="width:100%; opacity:0.7;">Already rebalanced as much as possible. To fix this, extend the deadline, lower its importance, or remove some steps.</small>`
+                    : `<button class="btn-bulk" onclick="getRecoveryPlan('${pid}', this)">🧠 Recovery Plan</button>`}
             </div>
         `).join('');
 
@@ -1469,10 +1473,20 @@
                 body: { goal, deadline, today, steps, dayLimits, existingLoad, overrides }
             });
             if (error) return uiAlert("Recovery plan failed: " + error.message);
-            if (!data?.moves?.length) return uiAlert(data?.summary || "AI couldn't find a way to recover this project's schedule.");
+            if (!data?.moves?.length) {
+                recoveryAttempted.add(projectId);
+                renderDashboard();
+                return uiAlert(data?.summary || "AI couldn't find a way to recover this project's schedule.");
+            }
 
             const ok = await uiConfirm(data.summary || `Reschedule ${data.moves.length} step(s)?`, { title: "Recovery plan for " + goal, okLabel: "Apply" });
-            if (ok) await applyMoves(data.moves);
+            if (ok) {
+                await applyMoves(data.moves);
+                if (projectStates[projectId] === 'at-risk') {
+                    recoveryAttempted.add(projectId);
+                    renderDashboard();
+                }
+            }
         } catch (err) {
             uiAlert("Recovery plan failed: " + err.message);
         } finally {
