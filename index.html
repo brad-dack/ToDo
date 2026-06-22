@@ -229,7 +229,7 @@
             <div style="background:#e8f4ff; border:2px solid var(--ink); border-radius:12px; padding:12px; margin-bottom:14px;">
                 <span class="field-label" style="display:block; margin-bottom:8px;">Manual entry</span>
                 <div><label class="field-label">Project Name</label><input id="mainGoal" placeholder="Project Name"></div>
-                <div><label class="field-label">Deadline</label><input type="date" id="goalDate"></div>
+                <div><label class="field-label">Deadline</label><input type="date" id="goalDate" class="full-date"></div>
                 <div style="margin-bottom:0;">
                     <label class="field-label">Importance</label>
                     <input type="hidden" id="mainImp" value="5">
@@ -270,7 +270,7 @@
             <input id="stageTitle" placeholder="Action Title">
             <div style="display:grid; grid-template-columns: 35% 1fr; gap:12px; align-items:end;">
                 <div style="min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="stageMins" max="15" value="15"></div>
-                <div style="min-width:0;"><label class="field-label">Action Date</label><input type="date" id="stageDate"></div>
+                <div style="min-width:0;"><label class="field-label">Action Date</label><input type="date" id="stageDate" class="full-date"></div>
             </div>
             <button onclick="addToStaging()" style="background:var(--green); color:var(--ink); width:100%; height:50px; border-radius:12px; font-weight:900; margin-bottom:15px; border:3px solid var(--ink); cursor:pointer; box-shadow:var(--shadow); font-family:inherit;">+ Add to Sequence</button>
             <div id="stagedList" style="margin-bottom:15px;"></div>
@@ -558,6 +558,41 @@
         showScreen('home');
         await loadSettings();
         refresh();
+        maybeShowFirstRunGuide();
+    }
+
+    const DAY_KEYS = ['mon','tue','wed','thu','fri','sat','sun'];
+
+    /* First sign-on: if no weekly capacity has been set yet, walk the user through the flow. */
+    function maybeShowFirstRunGuide() {
+        const hasCapacity = DAY_KEYS.some(d => (parseInt(settings[`${d}_limit`]) || 0) > 0);
+        if (hasCapacity) return;
+
+        const node = document.createElement('div');
+        node.innerHTML = `
+            <h3 class="modal-title">👋 Welcome! Here's the flow</h3>
+            <p class="modal-msg" style="margin-bottom:12px;">This planner fits your projects into the spare minutes you actually have each day.</p>
+            <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:6px;">
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <div class="imp-chip imp-7" style="width:28px; height:28px; font-size:0.8rem;">1</div>
+                    <p class="modal-msg" style="flex:1;"><b>Set your weekly minutes</b> in Settings — how long you can spend on tasks each day.</p>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <div class="imp-chip imp-7" style="width:28px; height:28px; font-size:0.8rem;">2</div>
+                    <p class="modal-msg" style="flex:1;"><b>Add a project</b> — describe it in plain English and let AI break it into steps, or enter them yourself.</p>
+                </div>
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <div class="imp-chip imp-7" style="width:28px; height:28px; font-size:0.8rem;">3</div>
+                    <p class="modal-msg" style="flex:1;"><b>Work the queue</b> on Home — knock off "Up Next", and Smart Reschedule rebalances the rest.</p>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-cancel" id="fr-later">Later</button>
+                <button class="submit-btn" id="fr-go" style="flex:2;">Set my minutes →</button>
+            </div>`;
+        const m = openModal(node, { dismissable: false });
+        node.querySelector('#fr-later').onclick = m.close;
+        node.querySelector('#fr-go').onclick = () => { m.close(); showScreen('settings'); };
     }
 
     function showScreen(name) {
