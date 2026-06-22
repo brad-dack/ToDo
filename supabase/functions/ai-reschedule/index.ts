@@ -29,10 +29,17 @@ Deno.serve(async (req) => {
         `capacity. dayLimits gives total minutes available per weekday (sun-sat), existingLoad lists ` +
         `minutes already committed on specific dates (from other tasks, not these ones), and overrides ` +
         `lists per-date capacity overrides (a limit of 0 means that date is unavailable). ` +
-        `\n\nAlso bring tasks FORWARD: if a task is scheduled in the future but there is spare capacity ` +
-        `on an earlier date (from ${today} onward), pull it earlier — prioritising higher-importance ` +
-        `tasks first. Fill earlier days before later days, never before ${today}. ` +
-        `Never set a task's due_date later than its goal_deadline if one is given. Don't schedule ` +
+        `\n\nAlso bring tasks FORWARD if there is spare capacity on an earlier date (from ${today} ` +
+        `onward), prioritising higher-importance tasks first. Fill earlier days before later days, ` +
+        `never before ${today}. ` +
+        `\n\nGUARDRAILS for bringing forward: ` +
+        `(1) Never pull a task more than 28 days earlier than its current due_date — a task set for ` +
+        `late December must not land in November just because June has spare capacity. ` +
+        `(2) Only displace a lower-importance task to a later date to make room for a higher-importance ` +
+        `task if their importance scores differ by MORE than 3 points (e.g. importance 8 can displace ` +
+        `importance 4, but importance 6 cannot displace importance 4). Never displace a task past its ` +
+        `goal_deadline. ` +
+        `Never set any task's due_date later than its goal_deadline if one is given. Don't schedule ` +
         `more total minutes onto a date than its remaining capacity allows (accounting for existingLoad ` +
         `and the other tasks you've already placed on that date). ` +
         `\n\nOnly include tasks in the result that actually change date. If nothing needs to change, ` +

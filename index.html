@@ -943,16 +943,38 @@
     }
 
     function editProject(projectId) {
+        const node = document.createElement('div');
+        const m = openModal(node);
+        renderEditProjectBody(projectId, node, m);
+    }
+
+    function renderEditProjectBody(projectId, node, m) {
         const tasks = masterTasks.filter(t => t.project_id === projectId);
-        if (!tasks.length) return uiAlert("Project not found.");
+        if (!tasks.length) { m.close(); return; }
         const currentName = projectNames[projectId] || '';
         const deadline = tasks[0].goal_deadline || '';
         const importance = tasks[0].importance;
         const recurRule = tasks[0].recurrence_rule || '';
         const impOpts = Array.from({length:10}, (_,i) => `<option value="${i+1}" ${importance == i+1 ? 'selected' : ''}>${i+1}</option>`).join('');
         const recurOpts = `<option value="">None</option>` + VALID_RULES.map(r => `<option ${recurRule === r ? 'selected' : ''}>${r}</option>`).join('');
-        const node = document.createElement('div');
+
+        const sorted = [...tasks].sort((a,b) => new Date(a.due_date) - new Date(b.due_date));
+        const stepsHtml = sorted.map(t => {
+            const s = splitTitle(t.title);
+            const ic = `imp-${Math.min(10, Math.max(1, parseInt(t.importance)||1))}`;
+            return `<div class="day-task">
+                <div class="imp-chip ${ic}" style="width:28px;height:28px;font-size:0.75rem;">${esc(t.importance)}</div>
+                <div style="flex:1;min-width:0;">
+                    <b style="font-size:0.82rem;">${esc(s.name)}</b><br>
+                    <small style="opacity:0.6;">${formatDate(t.due_date)} · ${t.duration}m</small>
+                </div>
+                <button class="btn-edit ps-edit" data-id="${esc(t.id)}">✎</button>
+                <button class="btn-edit ps-del" data-id="${esc(t.id)}" style="color:var(--red);">✕</button>
+            </div>`;
+        }).join('');
+
         node.innerHTML = `
+            <button class="modal-close ep-close-x">✕</button>
             <h3 class="modal-title">Edit Project</h3>
             <label class="field-label">Project Name</label>
             <input id="proj-name" value="${esc(currentName)}">
@@ -962,13 +984,29 @@
             <select id="proj-imp">${impOpts}</select>
             <label class="field-label">Recurrence (all steps)</label>
             <select id="proj-recur">${recurOpts}</select>
-            <button type="button" class="submit-btn" id="proj-delete" style="background:var(--red); color:white; margin-top:8px;">🗑️ Delete Whole Project</button>
-            <div class="modal-actions">
-                <button class="modal-cancel">Cancel</button>
+            <div class="modal-actions" style="margin-bottom:16px;">
+                <button class="modal-cancel" id="proj-cancel">Cancel</button>
                 <button class="submit-btn" id="proj-save" style="flex:2;">Save</button>
-            </div>`;
-        const m = openModal(node);
-        node.querySelector('.modal-cancel').onclick = m.close;
+            </div>
+            <span class="field-label" style="display:block; margin-bottom:8px;">Steps (${tasks.length})</span>
+            <div>${stepsHtml}</div>
+            <button type="button" class="submit-btn" id="proj-delete" style="background:var(--red); color:white; margin-top:12px;">🗑️ Delete Whole Project</button>`;
+
+        node.querySelector('.ep-close-x').onclick = m.close;
+        node.querySelector('#proj-cancel').onclick = m.close;
+
+        node.querySelectorAll('.ps-edit').forEach(b => b.onclick = () => {
+            editTask(b.dataset.id, () => renderEditProjectBody(projectId, node, m));
+        });
+
+        node.querySelectorAll('.ps-del').forEach(b => b.onclick = async () => {
+            if (!await uiConfirm("Delete this step? This can't be undone.", { title: "Delete step?", okLabel: "Delete", danger: true })) return;
+            const { error } = await dbCall(client.from('subtasks').delete().eq('id', b.dataset.id), "Delete step");
+            if (error) return;
+            await refresh();
+            renderEditProjectBody(projectId, node, m);
+        });
+
         node.querySelector('#proj-delete').onclick = async () => {
             const ok = await uiConfirm(
                 `This deletes "${currentName}" and all ${tasks.length} of its steps. This can't be undone.`,
@@ -980,6 +1018,7 @@
             m.close();
             refresh();
         };
+
         node.querySelector('#proj-save').onclick = async () => {
             const newName = node.querySelector('#proj-name').value.trim();
             const newDeadline = node.querySelector('#proj-date').value;
