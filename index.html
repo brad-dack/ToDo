@@ -99,7 +99,7 @@
         .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
         .page-header h2 { margin: 4px 0 18px; font-size: 1.5rem; font-weight: 900; }
         .page-header h2 span { background: var(--teal); color: var(--ink); padding: 2px 10px; border-radius: 10px; border: 3px solid var(--ink); display: inline-block; transform: rotate(-1.5deg); box-shadow: 3px 3px 0 var(--ink); }
-        .recur-link { font-size: 0.85rem; color: var(--blue); text-decoration: none; font-weight: 800; cursor: pointer; position: absolute; right: 20px; top: 20px; }
+        .recur-link { font-size: 0.85rem; color: var(--blue); text-decoration: none; font-weight: 800; cursor: pointer; display: inline-block; margin-bottom: 10px; }
         .deadline-ref { font-weight: 400; opacity: 0.7; font-size: 0.8rem; }
         .hidden { display: none; }
 
@@ -218,7 +218,6 @@
         <div class="page-header"><h2><span>New Project 🚀</span></h2></div>
 
         <div class="card" id="goalCapture">
-            <a class="recur-link" onclick="toggleRecurrence()">⚡ Reoccurring: <span id="recurLabel">Never</span></a>
             <span class="section-title" style="margin-top:0;">🎯 Project Goal</span>
 
             <div style="background:#fff8e1; border:2px solid var(--ink); border-radius:12px; padding:12px; margin-bottom:14px;">
@@ -238,10 +237,12 @@
                 </div>
             </div>
 
-            <div id="recurrencePicker" class="hidden" style="margin-top:10px; padding:15px; background:var(--bg); border-radius:12px; border:2px solid var(--ink);">
+            <a class="recur-link" onclick="toggleRecurrence()">⚡ Reoccurring: <span id="recurLabel">Never</span></a>
+            <div id="recurrencePicker" class="hidden" style="padding:15px; background:var(--bg); border-radius:12px; border:2px solid var(--ink); margin-bottom:10px;">
                 <label class="field-label">Repeat Every:</label>
                 <select id="recurRule" onchange="document.getElementById('recurLabel').innerText = this.value || 'Never'">
                     <option value="">Never</option>
+                    <option value="Every 2 Days">Every 2 Days</option>
                     <option value="Daily">Daily</option>
                     <option value="Weekly">Weekly</option>
                     <option value="Fortnightly">Fortnightly</option>
@@ -261,6 +262,8 @@
         <div class="card hidden" id="planningArea">
             <h3 id="displayGoal" style="margin:0 0 15px 0; font-size:1.05rem; font-weight:900;"></h3>
             <div style="background:#fff8e1; border:2px solid var(--ink); border-radius:12px; padding:12px; margin-bottom:14px;">
+                <label class="field-label" style="display:block; margin-bottom:6px;">Instructions for AI (optional)</label>
+                <textarea id="aiStepsInstructions" rows="2" placeholder="e.g. split it across evenings, start with research, keep steps under 10 mins" style="margin-bottom:10px;"></textarea>
                 <button class="submit-btn" style="background:var(--teal); margin-bottom:0;" id="generateStepsBtn" onclick="generateSteps()">🧠 Generate Steps with AI</button>
             </div>
             <span class="field-label">Manual entry</span>
@@ -403,7 +406,7 @@
     };
 
     const RECUR_OFFSETS = {
-        Daily: { d: 1 }, Weekly: { d: 7 }, Fortnightly: { d: 14 },
+        'Every 2 Days': { d: 2 }, Daily: { d: 1 }, Weekly: { d: 7 }, Fortnightly: { d: 14 },
         Monthly: { m: 1 }, Quarterly: { m: 3 }, 'Bi-annually': { m: 6 }, Annually: { m: 12 }
     };
     const shiftByRule = (dateStr, rule) => {
@@ -872,10 +875,10 @@
         if (!error) refresh();
     }
 
-    const VALID_RULES = ['Daily', 'Weekly', 'Fortnightly', 'Monthly', 'Quarterly', 'Bi-annually', 'Annually'];
+    const VALID_RULES = ['Every 2 Days', 'Daily', 'Weekly', 'Fortnightly', 'Monthly', 'Quarterly', 'Bi-annually', 'Annually'];
 
     /* Edit via a themed form modal (replaces the chained browser prompts) */
-    function editTask(id) {
+    function editTask(id, onSaved) {
         const t = masterTasks.find(task => task.id == id);
         if (!t) return;
         const node = document.createElement('div');
@@ -934,7 +937,8 @@
                 }
             }
             m.close();
-            refresh();
+            await refresh();
+            if (onSaved) onSaved();
         };
     }
 
@@ -958,12 +962,24 @@
             <select id="proj-imp">${impOpts}</select>
             <label class="field-label">Recurrence (all steps)</label>
             <select id="proj-recur">${recurOpts}</select>
+            <button type="button" class="submit-btn" id="proj-delete" style="background:var(--red); color:white; margin-top:8px;">🗑️ Delete Whole Project</button>
             <div class="modal-actions">
                 <button class="modal-cancel">Cancel</button>
                 <button class="submit-btn" id="proj-save" style="flex:2;">Save</button>
             </div>`;
         const m = openModal(node);
         node.querySelector('.modal-cancel').onclick = m.close;
+        node.querySelector('#proj-delete').onclick = async () => {
+            const ok = await uiConfirm(
+                `This deletes "${currentName}" and all ${tasks.length} of its steps. This can't be undone.`,
+                { title: "Delete project?", okLabel: "Delete", danger: true }
+            );
+            if (!ok) return;
+            const { error } = await dbCall(client.from('subtasks').delete().eq('project_id', projectId), "Delete project");
+            if (error) return;
+            m.close();
+            refresh();
+        };
         node.querySelector('#proj-save').onclick = async () => {
             const newName = node.querySelector('#proj-name').value.trim();
             const newDeadline = node.querySelector('#proj-date').value;
@@ -1035,6 +1051,7 @@
                 <div class="imp-chip ${impClass}" style="width:28px; height:28px; font-size:0.8rem;">${esc(t.importance)}</div>
                 <div style="flex:1; min-width:0;"><b style="font-size:0.85rem;">${esc(s.name)}</b><br><small style="opacity:0.6;">${esc(s.proj) || '—'} • ${t.duration}m</small></div>
                 <button class="btn-push dm-push" data-id="${esc(t.id)}">→</button>
+                <button class="btn-edit dm-edit" data-id="${esc(t.id)}">✎</button>
                 <button class="btn-done dm-done" data-id="${esc(t.id)}">✓</button>
                 <button class="btn-edit dm-del" data-id="${esc(t.id)}" style="color:var(--red);">✕</button>
             </div>`;
@@ -1071,6 +1088,7 @@
         node.querySelector('.dm-plus').onclick = () => adjustOverride(dateStr, 15, node);
         const reset = node.querySelector('.dm-reset');
         if (reset) reset.onclick = () => resetOverride(dateStr, node);
+        node.querySelectorAll('.dm-edit').forEach(b => b.onclick = () => editTask(b.dataset.id, () => renderDayModalBody(dateStr, node)));
         node.querySelectorAll('.dm-done').forEach(b => b.onclick = async () => { await completeTask(b.dataset.id); renderDayModalBody(dateStr, node); });
         node.querySelectorAll('.dm-push').forEach(b => b.onclick = async () => { await pushTask(b.dataset.id); renderDayModalBody(dateStr, node); });
         node.querySelectorAll('.dm-del').forEach(b => b.onclick = async () => { await deleteTask(b.dataset.id); renderDayModalBody(dateStr, node); });
@@ -1357,6 +1375,7 @@
     async function generateSteps() {
         const goal = activeGoal.goal;
         const deadline = activeGoal.date;
+        const instructions = document.getElementById('aiStepsInstructions')?.value?.trim() || '';
 
         const btn = document.getElementById('generateStepsBtn');
         const originalLabel = btn.innerText;
@@ -1369,7 +1388,7 @@
             const { dayLimits, existingLoad, overrides } = buildCapacityPayload(null, windowEnd);
 
             const { data, error } = await client.functions.invoke('ai-project-brain', {
-                body: { goal, deadline, today, dayLimits, existingLoad, overrides }
+                body: { goal, deadline, today, dayLimits, existingLoad, overrides, instructions }
             });
             if (error) return uiAlert("Smart breakdown failed: " + error.message);
             if (!data?.steps?.length) return uiAlert("AI couldn't come up with any steps - try a more specific goal.");
@@ -1424,7 +1443,7 @@
         try {
             const today = localDateStr();
             const tasks = masterTasks
-                .filter(t => t.due_date <= addDays(today, 7))
+                .filter(t => t.due_date <= addDays(today, 30))
                 .slice(0, 30)
                 .map(t => ({ id: t.id, title: t.title, duration: t.duration, due_date: t.due_date, goal_deadline: t.goal_deadline || null, importance: t.importance }));
 
@@ -1520,6 +1539,7 @@
         document.getElementById('stageTitle').value = '';
         document.getElementById('stageMins').value = '15';
         document.getElementById('stageDate').value = '';
+        document.getElementById('aiStepsInstructions').value = '';
     }
 </script>
 </body>

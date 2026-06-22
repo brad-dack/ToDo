@@ -6,7 +6,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { goal, deadline, today, dayLimits, existingLoad, overrides } = await req.json();
+    const { goal, deadline, today, dayLimits, existingLoad, overrides, instructions } = await req.json();
     if (!goal || !deadline || !today) {
       return new Response(JSON.stringify({ error: "goal, deadline and today are required" }), {
         status: 400,
@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
         `\n\ndayLimits: ${JSON.stringify(dayLimits)}` +
         `\nexistingLoad: ${JSON.stringify(existingLoad)}` +
         `\noverrides: ${JSON.stringify(overrides)}`,
-      messages: [{ role: "user", content: `Project goal: ${goal}` }],
+      messages: [{ role: "user", content: `Project goal: ${goal}${instructions ? `\n\nUser instructions: ${instructions}` : ''}` }],
       tool: {
         name: "plan_project",
         description: "Record the project breakdown",

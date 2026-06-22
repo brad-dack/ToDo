@@ -19,20 +19,25 @@ Deno.serve(async (req) => {
       maxTokens: 1200,
       system:
         `You help reschedule a personal task list for a 15-minute task planner. Today is ${today}. ` +
-        `The tasks list below are overdue or due soon, each with an id, title, duration (minutes), ` +
-        `current due_date, an optional goal_deadline (the project deadline this task belongs to, ` +
-        `if any), and importance (1-10). ` +
+        `Each task has an id, title, duration (minutes), current due_date, an optional goal_deadline, ` +
+        `and importance (1-10). ` +
+        `\n\nIMPORTANCE IS THE TOP PRIORITY. Higher-importance tasks must get earlier slots. ` +
+        `If a high-importance task and a low-importance task are competing for the same date's ` +
+        `remaining capacity, always place the higher-importance task earlier — even if it means ` +
+        `pushing the lower-importance task later (as long as that doesn't breach its goal_deadline). ` +
         `\n\nReschedule tasks that are overdue or piled up onto dates from ${today} onward with spare ` +
         `capacity. dayLimits gives total minutes available per weekday (sun-sat), existingLoad lists ` +
         `minutes already committed on specific dates (from other tasks, not these ones), and overrides ` +
-        `lists per-date capacity overrides (a limit of 0 means that date is unavailable). Prefer days ` +
-        `with more remaining capacity, and prefer moving higher-importance tasks to earlier available ` +
-        `slots. Never set a task's due_date later than its goal_deadline if one is given. Don't schedule ` +
+        `lists per-date capacity overrides (a limit of 0 means that date is unavailable). ` +
+        `\n\nAlso bring tasks FORWARD: if a task is scheduled in the future but there is spare capacity ` +
+        `on an earlier date (from ${today} onward), pull it earlier — prioritising higher-importance ` +
+        `tasks first. Fill earlier days before later days, never before ${today}. ` +
+        `Never set a task's due_date later than its goal_deadline if one is given. Don't schedule ` +
         `more total minutes onto a date than its remaining capacity allows (accounting for existingLoad ` +
         `and the other tasks you've already placed on that date). ` +
-        `\n\nOnly include tasks in the result that actually need to move - leave tasks alone if their ` +
-        `current due_date is already fine (e.g. due today or in the future with no conflict). If nothing ` +
-        `needs to change, return an empty moves array. ` +
+        `\n\nOnly include tasks in the result that actually change date. If nothing needs to change, ` +
+        `return an empty moves array. ` +
+        `\n\nThe summary must be ONE short sentence (max 12 words). Example: "Moved 4 tasks forward, prioritising your top projects." ` +
         `\n\ndayLimits: ${JSON.stringify(dayLimits)}` +
         `\nexistingLoad: ${JSON.stringify(existingLoad)}` +
         `\noverrides: ${JSON.stringify(overrides)}`,
@@ -43,7 +48,7 @@ Deno.serve(async (req) => {
         input_schema: {
           type: "object",
           properties: {
-            summary: { type: "string", description: "1-2 sentence plain-text explanation of the changes" },
+            summary: { type: "string", description: "One sentence, max 12 words, e.g. 'Moved 3 tasks forward, prioritising your top projects.'" },
             moves: {
               type: "array",
               items: {
