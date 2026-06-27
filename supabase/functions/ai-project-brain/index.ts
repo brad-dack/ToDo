@@ -22,11 +22,12 @@ Deno.serve(async (req) => {
         `15-minute task planner. Today is ${today}. The project deadline is ${deadline}. ` +
         `Each step must take 15 minutes or less and must have a due_date between ${today} and ${deadline} inclusive. ` +
         `Order steps logically (setup/preparation steps before steps that depend on them). ` +
-        `\n\nSchedule steps onto dates with spare capacity: dayLimits gives the total minutes available ` +
-        `per weekday (sun-sat), existingLoad lists minutes already committed on specific dates, and ` +
-        `overrides lists per-date capacity overrides (a limit of 0 means that date is unavailable). ` +
-        `Prefer days with more remaining capacity (limit minus existing load minus minutes you've already ` +
-        `scheduled for that date). Don't schedule more steps onto a date than its remaining capacity allows. ` +
+        `\n\nSchedule steps by working backwards from the deadline: the final step must fall on or near ${deadline}, ` +
+        `and earlier steps should be distributed proportionally back through the calendar leading up to it — ` +
+        `spread them across the full window rather than clustering at the start. ` +
+        `dayLimits gives the total minutes available per weekday (sun-sat), existingLoad lists minutes already ` +
+        `committed on specific dates, and overrides lists per-date capacity overrides (a limit of 0 means that ` +
+        `date is unavailable — skip those days). Don't schedule more steps onto a date than its remaining capacity allows. ` +
         `\n\nAlso rate the project's importance from 1 (trivial) to 10 (critical) based on the goal's wording ` +
         `and how tight the deadline is.` +
         `\n\nConsolidate related actions into a small number of meaningful steps - aim for 4-8 steps total ` +
