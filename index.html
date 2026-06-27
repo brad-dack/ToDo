@@ -608,7 +608,7 @@
     }
 
     async function loadSettings() {
-        const { data } = await client.from('user_settings').select('*').single();
+        const { data } = await client.from('user_settings').select('*').eq('user_id', (await client.auth.getUser()).data.user?.id).single();
         if (data) settings = data;
     }
 
