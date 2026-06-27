@@ -565,10 +565,11 @@
 
     const DAY_KEYS = ['mon','tue','wed','thu','fri','sat','sun'];
 
-    /* First sign-on: if no weekly capacity has been set yet, walk the user through the flow. */
+    /* Show on first visit or when no weekly capacity is set. */
     function maybeShowFirstRunGuide() {
         const hasCapacity = DAY_KEYS.some(d => (parseInt(settings[`${d}_limit`]) || 0) > 0);
-        if (hasCapacity) return;
+        const guideSeen = localStorage.getItem('guide_seen');
+        if (hasCapacity && guideSeen) return;
 
         const node = document.createElement('div');
         node.innerHTML = `
@@ -593,8 +594,9 @@
                 <button class="submit-btn" id="fr-go" style="flex:2;">Set my minutes →</button>
             </div>`;
         const m = openModal(node, { dismissable: false });
-        node.querySelector('#fr-later').onclick = m.close;
-        node.querySelector('#fr-go').onclick = () => { m.close(); showScreen('settings'); };
+        const dismiss = () => { localStorage.setItem('guide_seen', '1'); m.close(); };
+        node.querySelector('#fr-later').onclick = dismiss;
+        node.querySelector('#fr-go').onclick = () => { dismiss(); showScreen('settings'); };
     }
 
     function showScreen(name) {
