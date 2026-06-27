@@ -565,11 +565,10 @@
 
     const DAY_KEYS = ['mon','tue','wed','thu','fri','sat','sun'];
 
-    /* Show on first visit or when no weekly capacity is set. */
+    /* Show on first visit only, or if user has never set any minutes. */
     function maybeShowFirstRunGuide() {
         const hasCapacity = DAY_KEYS.some(d => (parseInt(settings[`${d}_limit`]) || 0) > 0);
-        const guideSeen = localStorage.getItem('guide_seen');
-        if (hasCapacity && guideSeen) return;
+        if (hasCapacity || localStorage.getItem('guide_seen')) return;
 
         const node = document.createElement('div');
         node.innerHTML = `
