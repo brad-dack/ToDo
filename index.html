@@ -205,6 +205,13 @@
             <div id="riskList"></div>
         </div>
 
+        <div class="card hidden" id="standbyCard">
+            <span class="section-title" style="margin-top:0;">🅿️ Standby</span>
+            <div style="font-weight:800; font-size:0.8rem; opacity:0.65; margin-bottom:12px;" id="standbySummary"></div>
+            <div id="standbyList"></div>
+            <small style="display:block; opacity:0.55; font-weight:700; margin-top:4px;">Ordered by deadline pressure, not preference. Each morning your spare capacity is filled from the top of this list — there's nothing to pick here on purpose.</small>
+        </div>
+
         <span class="section-title">📋 Active ToDo List</span>
         <div style="position:relative; margin-bottom:12px;">
             <input id="todoSearch" placeholder="🔎 Search active tasks…" oninput="renderToDo()" style="margin-bottom:0; padding-right:38px; width:100%;">
@@ -272,8 +279,9 @@
             <input id="stageTitle" placeholder="Action Title">
             <div style="display:grid; grid-template-columns: 35% 1fr; gap:12px; align-items:end;">
                 <div style="min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="stageMins" max="15" value="15"></div>
-                <div style="min-width:0;"><label class="field-label">Action Date</label><input type="date" id="stageDate" class="full-date"></div>
+                <div style="min-width:0;"><label class="field-label">Action Date (optional)</label><input type="date" id="stageDate" class="full-date"></div>
             </div>
+            <small style="display:block; opacity:0.65; font-weight:700; margin:-4px 0 12px;">Leave the date blank to send a step to 🅿️ Standby — it still counts toward the project deadline, and gets allocated to spare capacity automatically.</small>
             <button onclick="addToStaging()" style="background:var(--green); color:var(--ink); width:100%; height:50px; border-radius:12px; font-weight:900; margin-bottom:15px; border:3px solid var(--ink); cursor:pointer; box-shadow:var(--shadow); font-family:inherit;">+ Add to Sequence</button>
             <div id="stagedList" style="margin-bottom:15px;"></div>
             <div style="display:flex; gap:12px;">
@@ -327,6 +335,10 @@
     const CONFIG = { URL: "https://wuhklqulwhioiynoadtj.supabase.co", KEY: "sb_publishable_-Pvtjx_Ticah2G1g6ZtJ9A_rOxaZvRx" };
     const client = supabase.createClient(CONFIG.URL, CONFIG.KEY);
     let masterTasks = [], stagingTasks = [], activeGoal = null, settings = {}, streakCount = 0, capacityOverrides = {};
+    /* masterTasks holds every incomplete step and stays the source of truth for
+       project-level maths (a Standby step still counts toward its project's load).
+       datedTasks/poolTasks are the two views the UI actually renders. */
+    let datedTasks = [], poolTasks = [];
 
     const formatDate = (dStr) => { if(!dStr) return ""; const [y,m,d] = dStr.split("-"); return `${d}/${m}/${y.slice(-2)}`; };
 
@@ -547,7 +559,7 @@
     }
 
     function showAuthScreen() {
-        masterTasks = []; stagingTasks = []; activeGoal = null; settings = {}; streakCount = 0; capacityOverrides = {};
+        masterTasks = []; datedTasks = []; poolTasks = []; stagingTasks = []; activeGoal = null; settings = {}; streakCount = 0; capacityOverrides = {};
         document.getElementById('authEmail').value = '';
         document.getElementById('authPassword').value = '';
         document.getElementById('authError').classList.add('hidden');
@@ -618,21 +630,52 @@
         if (!error && data) data.forEach(r => { capacityOverrides[r.date] = r.limit_override; });
     }
 
-    let projectStates = {}, projectNames = {};
+    let projectStates = {}, projectNames = {}, projectTightness = {};
     const recoveryAttempted = new Set();
+    /* Finite stand-in for "can't fit / already overdue", so tightness stays safe to do
+       arithmetic on in sort comparators (Infinity - Infinity is NaN). */
+    const MAX_TIGHTNESS = 9999;
+    /* Standby steps passed over this many times get flagged in the UI. */
+    const DODGED_THRESHOLD = 5;
 
     async function refresh() {
         await loadOverrides();
         const { data: active } = await client.from('subtasks').select('*').eq('completed', false);
         const { data: completed } = await client.from('subtasks').select('*').eq('completed', true).order('updated_at', { ascending: false }).limit(5);
         masterTasks = active || [];
-        masterTasks.sort((a,b) => new Date(a.due_date) - new Date(b.due_date) || b.importance - a.importance);
+        sortMasterTasks();
+        splitTaskLists();
         computeProjectStates();
+
+        /* Allocate today's spare capacity from Standby before anything renders, so the
+           first thing shown is already the real plan for the day. */
+        if (await sweepStandby()) {
+            sortMasterTasks();
+            splitTaskLists();
+            computeProjectStates();
+        }
+
         streakCount = await computeStreak();
         renderDashboard();
         renderToDo();
+        renderStandby();
         renderArchived(completed || []);
         loadWeeklyReview();
+    }
+
+    /* Undated Standby steps sort last — they have no day to sit on, and letting them
+       fall to the front (new Date(null) is the epoch) would hijack the focus queue. */
+    function sortMasterTasks() {
+        masterTasks.sort((a,b) =>
+            ((a.due_date ? 0 : 1) - (b.due_date ? 0 : 1)) ||
+            (a.due_date && b.due_date ? new Date(a.due_date) - new Date(b.due_date) : 0) ||
+            (b.importance - a.importance)
+        );
+    }
+
+    function splitTaskLists() {
+        datedTasks = masterTasks.filter(t => t.due_date);
+        poolTasks = masterTasks.filter(t => !t.due_date);
     }
 
     async function computeStreak() {
@@ -652,8 +695,25 @@
         return streak;
     }
 
+    /* Free minutes between today and `deadline`, ignoring work that belongs to `pid`
+       (a project's own steps aren't an obstacle to scheduling that project). Note this
+       never looks at whether pid's steps are dated — it is purely "how much room is
+       there in the window", which is what makes Standby steps work here unchanged. */
+    function capacityPool(deadline, pid) {
+        let pool = 0, cursor = localDateStr();
+        while (cursor <= deadline) {
+            const limit = dayLimit(cursor, 0);
+            const otherLoad = masterTasks
+                .filter(t => t.due_date === cursor && t.project_id !== pid)
+                .reduce((s,t) => s + t.duration, 0);
+            pool += Math.max(0, limit - otherLoad);
+            cursor = addDays(cursor, 1);
+        }
+        return pool;
+    }
+
     function computeProjectStates() {
-        projectStates = {}; projectNames = {};
+        projectStates = {}; projectNames = {}; projectTightness = {};
         const todayStr = localDateStr();
 
         const byProject = {};
@@ -669,22 +729,120 @@
 
         for (const [pid, info] of Object.entries(byProject)) {
             const deadline = info.goal_deadline;
-            if (!deadline) { projectStates[pid] = 'normal'; continue; }
+            if (!deadline) { projectStates[pid] = 'normal'; projectTightness[pid] = 0; continue; }
 
-            if (deadline < todayStr) { projectStates[pid] = 'overdue'; continue; }
+            if (deadline < todayStr) { projectStates[pid] = 'overdue'; projectTightness[pid] = MAX_TIGHTNESS; continue; }
 
             const projectMinutes = info.tasks.reduce((s,t) => s + t.duration, 0);
-            let pool = 0, cursor = todayStr;
-            while (cursor <= deadline) {
-                const limit = dayLimit(cursor, 0);
-                const otherLoad = masterTasks
-                    .filter(t => t.due_date === cursor && t.project_id !== pid)
-                    .reduce((s,t) => s + t.duration, 0);
-                pool += Math.max(0, limit - otherLoad);
-                cursor = addDays(cursor, 1);
-            }
+            const pool = capacityPool(deadline, pid);
+            /* Tightness = the share of the remaining window this project's outstanding work
+               needs. Above 1 it cannot fit. This is the Standby ranking signal: it rises on
+               its own as a deadline nears, so nothing has to be prioritised by hand. */
+            projectTightness[pid] = pool > 0 ? Math.min(MAX_TIGHTNESS, projectMinutes / pool) : MAX_TIGHTNESS;
             projectStates[pid] = projectMinutes > pool ? 'at-risk' : 'normal';
         }
+    }
+
+    /* ---------- Standby allocation ----------
+       The point of Standby is that the day's spare capacity gets filled *for* you. Free
+       choice from a backlog reliably surfaces the easy and enjoyable items, so nothing
+       here lets a step be picked: the sweep takes the top of the derived ranking, and the
+       only control is deferring, which is counted. */
+
+    const SWEEP_KEY = 'standby_sweep_date';
+
+    /* Yesterday's unfinished auto-placements go back to Standby rather than silently
+       becoming overdue — the app chose that day, so the app clears up after itself. It
+       still counts as a defer: passing on something by ignoring it is passing on it. */
+    async function reclaimStaleAutoPlacements(todayStr) {
+        let changed = false;
+        for (const t of datedTasks.filter(t => t.auto_placed && t.due_date < todayStr)) {
+            const next = (t.defer_count || 0) + 1;
+            const { error } = await client.from('subtasks')
+                .update({ due_date: null, auto_placed: false, defer_count: next, updated_at: new Date().toISOString() })
+                .eq('id', t.id);
+            /* last_offered is deliberately not touched, so a reclaimed step is eligible
+               for allocation again today. */
+            if (error) continue;
+            Object.assign(t, { due_date: null, auto_placed: false, defer_count: next });
+            changed = true;
+        }
+        return changed;
+    }
+
+    /* Fills today's leftover capacity from the top of the Standby ranking. Runs once per
+       day: the allocation is the morning's decision, not something that re-triggers and
+       tops the day back up every time a task is ticked off. */
+    async function sweepStandby() {
+        const todayStr = localDateStr();
+        let changed = await reclaimStaleAutoPlacements(todayStr);
+        if (changed) splitTaskLists();
+
+        if (localStorage.getItem(SWEEP_KEY) === todayStr) return changed;
+        localStorage.setItem(SWEEP_KEY, todayStr);
+        if (!poolTasks.length) return changed;
+
+        const todayLoad = datedTasks
+            .filter(t => t.due_date === todayStr)
+            .reduce((s,t) => s + t.duration, 0);
+        let remaining = Math.max(0, dayLimit(todayStr) - todayLoad);
+
+        /* Snapshot the ranking up front: one step per project per day. Unlocking the next
+           step in a sequence the moment its predecessor lands would dump a whole project
+           into a single day. */
+        const candidates = rankedStandby().filter(r => r.task.last_offered !== todayStr);
+
+        for (const { task } of candidates) {
+            if (remaining <= 0) break;
+            if (task.duration > remaining) continue;
+            const { error } = await client.from('subtasks')
+                .update({ due_date: todayStr, auto_placed: true, last_offered: todayStr, updated_at: new Date().toISOString() })
+                .eq('id', task.id);
+            if (error) continue;
+            Object.assign(task, { due_date: todayStr, auto_placed: true, last_offered: todayStr });
+            remaining -= task.duration;
+            changed = true;
+        }
+        return changed;
+    }
+
+    /* Send an auto-placed step back to Standby. Deferring is always allowed — some days it
+       rains — but it is counted, and the tally is what stops "not today" being free. */
+    async function deferTask(id) {
+        const t = masterTasks.find(x => x.id == id);
+        if (!t) return;
+        const next = (t.defer_count || 0) + 1;
+        const { error } = await dbCall(client.from('subtasks').update({
+            due_date: null,
+            auto_placed: false,
+            defer_count: next,
+            /* Blocks re-placement by a later refresh today. */
+            last_offered: localDateStr(),
+            updated_at: new Date().toISOString()
+        }).eq('id', id), "Defer");
+        if (error) return;
+        if (next === DODGED_THRESHOLD) {
+            uiAlert(`That's ${next} times you've passed on "${splitTitle(t.title).name}". It's still counting toward its deadline.`, 'Noted');
+        }
+        refresh();
+    }
+
+    /* Standby ordering, derived rather than chosen. Only a project's next undated step is
+       eligible, so a sequence (sand, then prime, then paint) can't be jumped. */
+    function rankedStandby() {
+        const nextByProject = {};
+        for (const t of poolTasks) {
+            const key = t.project_id || `solo_${t.id}`;
+            const cur = nextByProject[key];
+            if (!cur || (t.sort_order ?? 0) < (cur.sort_order ?? 0)) nextByProject[key] = t;
+        }
+        return Object.values(nextByProject)
+            .map(task => ({ task, tightness: projectTightness[task.project_id] ?? 0 }))
+            .sort((a,b) =>
+                (b.tightness - a.tightness) ||
+                (b.task.importance - a.task.importance) ||
+                ((b.task.defer_count || 0) - (a.task.defer_count || 0))
+            );
     }
 
     const stateBadge = (pid) => {
@@ -726,15 +884,18 @@
         const date = document.getElementById('stageDate').value;
 
         if(!title) return uiAlert("Action title required");
-        if(!date) return uiAlert("Action date required");
         if(!Number.isFinite(mins) || mins <= 0) return uiAlert("Minutes must be a positive number");
         if(mins > 15) return uiAlert("Max 15 mins per action");
-        if(date > activeGoal.date) return uiAlert("Action date past deadline");
 
-        const stagedLoad = stagingTasks.filter(t => t.due_date === date).reduce((s,t) => s + t.duration, 0);
-        if(!hasCapacity(date, mins + stagedLoad)) return uiAlert("Day is at capacity!");
+        /* No date = Standby. Capacity and deadline checks only apply to dated steps;
+           a Standby step is constrained by the project deadline, not by any one day. */
+        if (date) {
+            if(date > activeGoal.date) return uiAlert("Action date past deadline");
+            const stagedLoad = stagingTasks.filter(t => t.due_date === date).reduce((s,t) => s + t.duration, 0);
+            if(!hasCapacity(date, mins + stagedLoad)) return uiAlert("Day is at capacity!");
+        }
 
-        stagingTasks.push({ title, duration: mins, due_date: date });
+        stagingTasks.push({ title, duration: mins, due_date: date || null });
         document.getElementById('stageTitle').value = '';
         renderStaging();
     }
@@ -745,7 +906,7 @@
                 <div class="delete-bg">Delete</div>
                 <div class="staged-item" data-idx="${i}">
                     <span class="drag-handle">☰</span>
-                    <span class="staged-body"><b>${esc(t.title)}</b> (${t.duration}m) - ${formatDate(t.due_date)}</span>
+                    <span class="staged-body"><b>${esc(t.title)}</b> (${t.duration}m) - ${t.due_date ? formatDate(t.due_date) : '🅿️ Standby'}</span>
                     <button class="staged-delete" onclick="editStaged(${i})">✎</button>
                     <button class="staged-delete" onclick="removeStaged(${i})">✕</button>
                 </div>
@@ -769,7 +930,7 @@
             <input id="edit-staged-title" value="${esc(t.title)}">
             <div style="display:grid; grid-template-columns: 38% 1fr; gap:12px;">
                 <div style="min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="edit-staged-mins" max="15" value="${esc(t.duration)}"></div>
-                <div style="min-width:0;"><label class="field-label">Date</label><input type="date" id="edit-staged-date" value="${esc(t.due_date)}" max="${esc(activeGoal.date)}"></div>
+                <div style="min-width:0;"><label class="field-label">Date (blank = Standby)</label><input type="date" id="edit-staged-date" value="${esc(t.due_date || '')}" max="${esc(activeGoal.date)}"></div>
             </div>
             <div class="modal-actions">
                 <button class="modal-cancel">Cancel</button>
@@ -783,15 +944,18 @@
             const date = node.querySelector('#edit-staged-date').value;
 
             if (!title) return uiAlert("Action title required");
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return uiAlert("Action date required");
             if (!Number.isFinite(duration) || duration <= 0) return uiAlert("Minutes must be a positive number");
             if (duration > 15) return uiAlert("Max 15 mins per action");
-            if (date > activeGoal.date) return uiAlert("Action date past deadline");
 
-            const stagedLoad = stagingTasks.filter((s, idx) => idx !== i && s.due_date === date).reduce((s,x) => s + x.duration, 0);
-            if (!hasCapacity(date, duration + stagedLoad)) return uiAlert("Day is at capacity!");
+            /* Clearing the date moves the step to Standby; see addToStaging(). */
+            if (date) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return uiAlert("Date is not valid");
+                if (date > activeGoal.date) return uiAlert("Action date past deadline");
+                const stagedLoad = stagingTasks.filter((s, idx) => idx !== i && s.due_date === date).reduce((s,x) => s + x.duration, 0);
+                if (!hasCapacity(date, duration + stagedLoad)) return uiAlert("Day is at capacity!");
+            }
 
-            stagingTasks[i] = { title, duration, due_date: date };
+            stagingTasks[i] = { title, duration, due_date: date || null };
             renderStaging();
             m.close();
         };
@@ -826,8 +990,10 @@
         const toInsert = stagingTasks.map((t, idx) => ({
             title: `${activeGoal.goal}: ${t.title}`,
             duration: t.duration,
-            due_date: t.due_date,
-            base_due_date: t.due_date,
+            due_date: t.due_date || null,
+            /* Null baseline for Standby steps, so a recurring project's dateless
+               steps come back dateless rather than being handed an invented date. */
+            base_due_date: t.due_date || null,
             importance: parseInt(activeGoal.imp),
             goal_deadline: activeGoal.date,
             base_goal_deadline: activeGoal.date,
@@ -857,6 +1023,8 @@
     async function pushTask(id) {
         const t = masterTasks.find(task => task.id == id);
         if (!t) return;
+        /* A Standby step has no day to push off; deferring is its equivalent. */
+        if (!t.due_date) return uiAlert("This step is in Standby — it has no date to push.");
         const targetDateStr = addDays(t.due_date, 1);
 
         if (!hasCapacity(targetDateStr, t.duration, t.id)) return uiAlert(`${formatDate(targetDateStr)} is already at capacity!`);
@@ -900,9 +1068,16 @@
             const { id, created_at, updated_at, ...data } = t;
             // Shift from the immutable baseline, not the live date, so a pushed/edited
             // occurrence never drags the next cycle along with it.
-            const baseDue = t.base_due_date || t.due_date;
+            /* No fallback to due_date here: a Standby step deliberately has a null
+               baseline, and an auto-placed one is sitting on a day the app chose. Falling
+               back would turn that incidental date into the next cycle's schedule. Dated
+               steps always have base_due_date set (on creation, and backfilled by the
+               20260627 migration), so the column alone is the correct anchor. */
+            const baseDue = t.base_due_date;
             const baseDeadline = t.base_goal_deadline || t.goal_deadline || null;
-            const nextDue = shiftByRule(baseDue, task.recurrence_rule);
+            /* A Standby step stays dateless in the next cycle — back into the pool to be
+               allocated again, rather than onto a day. */
+            const nextDue = baseDue ? shiftByRule(baseDue, task.recurrence_rule) : null;
             const nextDeadline = baseDeadline ? shiftByRule(baseDeadline, task.recurrence_rule) : null;
             return {
                 ...data,
@@ -911,7 +1086,11 @@
                 goal_deadline: nextDeadline,
                 base_goal_deadline: nextDeadline,
                 project_id: newProjId,
-                completed: false
+                completed: false,
+                /* Fresh cycle: clear the previous occurrence's allocation history. */
+                auto_placed: false,
+                defer_count: 0,
+                last_offered: null
             };
         });
         await dbCall(client.from('subtasks').insert(newBatch), "Recurrence clone");
@@ -940,7 +1119,7 @@
             <input id="edit-title" value="${esc(t.title)}">
             <div style="display:grid; grid-template-columns: 38% 1fr; gap:12px;">
                 <div style="min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="edit-mins" max="15" value="${esc(t.duration)}"></div>
-                <div style="min-width:0;"><label class="field-label">Date</label><input type="date" id="edit-date" value="${esc(t.due_date)}"${t.goal_deadline ? ` max="${esc(t.goal_deadline)}"` : ''}></div>
+                <div style="min-width:0;"><label class="field-label">Date (blank = Standby)</label><input type="date" id="edit-date" value="${esc(t.due_date)}"${t.goal_deadline ? ` max="${esc(t.goal_deadline)}"` : ''}></div>
             </div>
             <label class="field-label">Importance (applies to whole project)</label>
             <select id="edit-imp">${impOpts}</select>
@@ -967,11 +1146,20 @@
             if (!newTitle) return uiAlert("Title required.");
             if (!Number.isFinite(duration) || duration <= 0) return uiAlert("Minutes must be a positive number.");
             if (duration > 15) return uiAlert("Task must be 15 mins or less.");
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return uiAlert("Please pick a date.");
-            if (t.goal_deadline && newDate > t.goal_deadline) return uiAlert("Date is past project deadline.");
-            if (!hasCapacity(newDate, duration, t.id)) return uiAlert("Target date is at capacity!");
+            /* Clearing the date returns the step to Standby. */
+            if (newDate) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return uiAlert("Date is not valid.");
+                if (t.goal_deadline && newDate > t.goal_deadline) return uiAlert("Date is past project deadline.");
+                if (!hasCapacity(newDate, duration, t.id)) return uiAlert("Target date is at capacity!");
+            }
 
-            const { error } = await dbCall(client.from('subtasks').update({ title: newTitle, duration, due_date: newDate, importance, updated_at: new Date().toISOString() }).eq('id', id), "Edit");
+            /* Setting a date by hand is a deliberate commitment, so the step stops being an
+               allocation and keeps the date; clearing it hands the step back to the pool.
+               Either way auto_placed no longer applies. */
+            const { error } = await dbCall(client.from('subtasks').update({
+                title: newTitle, duration, due_date: newDate || null, importance,
+                auto_placed: false, updated_at: new Date().toISOString()
+            }).eq('id', id), "Edit");
             if (error) return;
 
             if (t.project_id && importance !== t.importance) {
@@ -1006,7 +1194,12 @@
         const impOpts = Array.from({length:10}, (_,i) => `<option value="${i+1}" ${importance == i+1 ? 'selected' : ''}>${i+1}</option>`).join('');
         const recurOpts = `<option value="">None</option>` + VALID_RULES.map(r => `<option ${recurRule === r ? 'selected' : ''}>${r}</option>`).join('');
 
-        const sorted = [...tasks].sort((a,b) => new Date(a.due_date) - new Date(b.due_date));
+        /* Dated steps in date order, then Standby steps in sequence order. */
+        const sorted = [...tasks].sort((a,b) =>
+            ((a.due_date ? 0 : 1) - (b.due_date ? 0 : 1)) ||
+            (a.due_date && b.due_date ? new Date(a.due_date) - new Date(b.due_date) : 0) ||
+            ((a.sort_order ?? 0) - (b.sort_order ?? 0))
+        );
         const stepsHtml = sorted.map(t => {
             const s = splitTitle(t.title);
             const ic = `imp-${Math.min(10, Math.max(1, parseInt(t.importance)||1))}`;
@@ -1014,7 +1207,7 @@
                 <div class="imp-chip ${ic}" style="width:28px;height:28px;font-size:0.75rem;">${esc(t.importance)}</div>
                 <div style="flex:1;min-width:0;">
                     <b style="font-size:0.82rem;">${esc(s.name)}</b><br>
-                    <small style="opacity:0.6;">${formatDate(t.due_date)} · ${t.duration}m</small>
+                    <small style="opacity:0.6;">${t.due_date ? formatDate(t.due_date) : '🅿️ Standby'} · ${t.duration}m</small>
                 </div>
                 <button class="btn-edit ps-edit" data-id="${esc(t.id)}">✎</button>
                 <button class="btn-edit ps-del" data-id="${esc(t.id)}" style="color:var(--red);">✕</button>
@@ -1134,7 +1327,7 @@
             <input id="add-step-title" placeholder="What needs doing?">
             <div style="display:grid; grid-template-columns: 38% 1fr; gap:12px;">
                 <div style="min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="add-step-mins" max="15" value="15"></div>
-                <div style="min-width:0;"><label class="field-label">Date</label><input type="date" id="add-step-date" value="${esc(defaultDate)}"${deadline ? ` max="${esc(deadline)}"` : ''}></div>
+                <div style="min-width:0;"><label class="field-label">Date (blank = Standby)</label><input type="date" id="add-step-date" value="${esc(defaultDate)}"${deadline ? ` max="${esc(deadline)}"` : ''}></div>
             </div>
             <div class="modal-actions">
                 <button class="modal-cancel">Cancel</button>
@@ -1150,15 +1343,18 @@
             if (!title) return uiAlert("Step title required.");
             if (!Number.isFinite(duration) || duration <= 0) return uiAlert("Minutes must be a positive number.");
             if (duration > 15) return uiAlert("Max 15 mins per step.");
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return uiAlert("Please pick a date.");
-            if (deadline && date > deadline) return uiAlert("Date is past the project deadline.");
-            if (!hasCapacity(date, duration)) return uiAlert("That day is at capacity!");
+            /* Blank date adds the step to Standby instead of a specific day. */
+            if (date) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return uiAlert("Date is not valid.");
+                if (deadline && date > deadline) return uiAlert("Date is past the project deadline.");
+                if (!hasCapacity(date, duration)) return uiAlert("That day is at capacity!");
+            }
 
             const { error } = await dbCall(client.from('subtasks').insert({
                 title: `${projName}: ${title}`,
                 duration,
-                due_date: date,
-                base_due_date: date,
+                due_date: date || null,
+                base_due_date: date || null,
                 importance: ref.importance,
                 goal_deadline: ref.goal_deadline || null,
                 base_goal_deadline: ref.goal_deadline || null,
@@ -1378,19 +1574,26 @@
 
     function renderQueue() {
         const queue = document.getElementById('focusQueue');
-        if (!masterTasks.length) {
-            queue.innerHTML = `<div class="focus-card"><span class="focus-eyebrow">▶ Up Next</span><div class="focus-title">All clear! 🎉</div><div class="focus-meta">No active tasks.</div></div>`;
+        if (!datedTasks.length) {
+            const waiting = poolTasks.length
+                ? `Nothing scheduled. ${poolTasks.length} step${poolTasks.length===1?'':'s'} waiting in Standby.`
+                : `No active tasks.`;
+            queue.innerHTML = `<div class="focus-card"><span class="focus-eyebrow">▶ Up Next</span><div class="focus-title">All clear! 🎉</div><div class="focus-meta">${waiting}</div></div>`;
             return;
         }
-        const [first, second, third] = masterTasks;
+        const [first, second, third] = datedTasks;
         const f = splitTitle(first.title);
         let html = `<div class="focus-card">
             <span class="focus-eyebrow">▶ Up Next</span>
             <div class="focus-title">${esc(f.name)}</div>
-            <div class="focus-meta">${esc(f.proj)}${stateBadge(first.project_id)} · ${first.duration}m · due ${formatDate(first.due_date)}</div>
+            <div class="focus-meta">${esc(f.proj)}${stateBadge(first.project_id)} · ${first.duration}m · ${first.auto_placed ? 'allocated from 🅿️ Standby' : `due ${formatDate(first.due_date)}`}</div>
             <div class="focus-actions">
                 <button class="btn-big btn-go" data-id="${esc(first.id)}" data-act="complete">Done ✓</button>
-                <button class="btn-big btn-skip" data-id="${esc(first.id)}" data-act="push">Push →</button>
+                ${first.auto_placed
+                    /* Pushing would quietly pin an allocated step to a real date; sending it
+                       back to Standby keeps it in the ranking and on the defer tally. */
+                    ? `<button class="btn-big btn-skip" data-id="${esc(first.id)}" data-act="defer">Not today</button>`
+                    : `<button class="btn-big btn-skip" data-id="${esc(first.id)}" data-act="push">Push →</button>`}
             </div>
         </div>`;
         [[second, '2ND'], [third, '3RD']].forEach(([t, label]) => {
@@ -1404,7 +1607,8 @@
         const query = (document.getElementById('todoSearch')?.value || '').trim().toLowerCase();
         const clearBtn = document.getElementById('todoSearchClear');
         if (clearBtn) clearBtn.style.display = query ? 'block' : 'none';
-        const tasks = query ? masterTasks.filter(t => t.title.toLowerCase().includes(query)) : masterTasks;
+        /* Dated steps only; Standby has its own card so the two never blur together. */
+        const tasks = query ? datedTasks.filter(t => t.title.toLowerCase().includes(query)) : datedTasks;
         if (query && tasks.length === 0) {
             document.getElementById('masterToDo').innerHTML = `<p style="opacity:0.6; font-weight:700; text-align:center;">No matches for "${esc(query)}"</p>`;
             return;
@@ -1415,14 +1619,74 @@
             <div class="todo-item${stateRowClass(t.project_id)}">
                 <div class="imp-chip ${impClass}">${esc(t.importance)}</div>
                 <div style="flex:1; min-width:0;">
-                    <b>${esc(t.title)}</b>${stateBadge(t.project_id)}<br>
+                    <b>${esc(t.title)}</b>${stateBadge(t.project_id)}${t.auto_placed ? ` <span class="badge">🅿️ ALLOCATED</span>` : ''}<br>
                     <small>${formatDate(t.due_date)} • ${t.duration}m</small>
                 </div>
                 <div style="display:flex; gap:6px; align-items:center;">
+                    ${t.auto_placed ? `<button class="btn-edit" title="Back to Standby" data-id="${esc(t.id)}" data-act="defer">🅿️</button>` : ''}
                     <button class="btn-edit" style="color:var(--red)" data-id="${esc(t.id)}" data-act="delete">✕</button>
                     <button class="btn-edit" data-id="${esc(t.id)}" data-act="edit">✎</button>
                     <button class="btn-done" data-id="${esc(t.id)}" data-act="complete">✓</button>
                 </div>
+            </div>`;
+        }).join('');
+    }
+
+    /* Grouped by project, projects ordered by deadline pressure, steps in sequence order.
+       Read-only: seeing the whole backlog is useful, choosing from it is the thing to avoid. */
+    function renderStandby() {
+        const card = document.getElementById('standbyCard');
+        if (!poolTasks.length) { card.classList.add('hidden'); return; }
+        card.classList.remove('hidden');
+
+        const total = poolTasks.reduce((s,t) => s + t.duration, 0);
+        document.getElementById('standbySummary').innerText =
+            `${poolTasks.length} step${poolTasks.length===1?'':'s'} · ${total}m of work waiting for a gap`;
+
+        const groups = {};
+        for (const t of poolTasks) {
+            const key = t.project_id || `solo_${t.id}`;
+            (groups[key] = groups[key] || []).push(t);
+        }
+
+        const ordered = Object.entries(groups)
+            .map(([pid, tasks]) => ({
+                pid,
+                tasks: tasks.slice().sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+                tightness: projectTightness[pid] ?? 0,
+                deadline: tasks[0].goal_deadline
+            }))
+            .sort((a,b) => b.tightness - a.tightness);
+
+        document.getElementById('standbyList').innerHTML = ordered.map(g => {
+            const name = projectNames[g.pid] || splitTitle(g.tasks[0].title).proj || 'Unfiled';
+            const overdue = g.deadline && g.deadline < localDateStr();
+            const pressure = overdue ? 'DEADLINE PASSED'
+                : g.tightness >= 1 ? "WON'T FIT"
+                /* Don't round a distant deadline down to a flat "0% of window". */
+                : g.tightness < 0.01 ? 'LOADS OF ROOM'
+                : `${Math.round(g.tightness * 100)}% of window`;
+            const pressureCls = overdue ? 'badge-overdue' : g.tightness >= 1 ? 'badge-atrisk' : '';
+
+            const steps = g.tasks.map((t, i) => {
+                const dc = t.defer_count || 0;
+                return `<div class="day-task">
+                    <span class="queue-pos"${i === 0 ? '' : ' style="opacity:0.3;"'}>${i === 0 ? 'NEXT' : i + 1}</span>
+                    <div style="flex:1; min-width:0;">
+                        <b style="font-size:0.82rem;">${esc(splitTitle(t.title).name)}</b><br>
+                        <small style="opacity:0.6;">${t.duration}m${dc ? ` · passed over ${dc}×` : ''}</small>
+                    </div>
+                    ${dc >= DODGED_THRESHOLD ? `<span class="badge badge-overdue">DODGED</span>` : ''}
+                </div>`;
+            }).join('');
+
+            return `<div style="margin-bottom:16px;">
+                <div style="display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+                    <b style="font-size:0.9rem;">${esc(name)}</b>
+                    <small style="opacity:0.6;">due ${formatDate(g.deadline)}</small>
+                    <span class="badge ${pressureCls}">${pressure}</span>
+                </div>
+                ${steps}
             </div>`;
         }).join('');
     }
@@ -1433,7 +1697,7 @@
         ).join('');
     }
 
-    const ACTIONS = { push: pushTask, complete: completeTask, delete: deleteTask, edit: editTask, uncomplete: uncompleteTask };
+    const ACTIONS = { push: pushTask, complete: completeTask, delete: deleteTask, edit: editTask, uncomplete: uncompleteTask, defer: deferTask };
     document.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-act]');
         if (!btn) return;
@@ -1535,6 +1799,7 @@
         const loadByDate = {};
         for (const t of masterTasks) {
             if (t.project_id === excludeProjectId) continue;
+            if (!t.due_date) continue; // Standby steps aren't on a day, so they add no load.
             if (t.due_date >= today && t.due_date <= windowEnd) {
                 loadByDate[t.due_date] = (loadByDate[t.due_date] || 0) + t.duration;
             }
@@ -1591,6 +1856,7 @@
         const loadByDate = {};
         for (const t of masterTasks) {
             if (moveIds.has(String(t.id))) continue;
+            if (!t.due_date) continue; // Standby steps occupy no day, so they add no load.
             loadByDate[t.due_date] = (loadByDate[t.due_date] || 0) + t.duration;
         }
         const enriched = moves
@@ -1606,9 +1872,11 @@
             if (used + t.duration <= dayLimit(target)) {
                 loadByDate[target] = used + t.duration;
                 accepted.push({ id: m.id, due_date: target });
-            } else {
+            } else if (t.due_date) {
                 loadByDate[t.due_date] = (loadByDate[t.due_date] || 0) + t.duration;
                 dropped++;
+            } else {
+                dropped++; // Stays in Standby.
             }
         }
         return { accepted, dropped };
@@ -1652,7 +1920,9 @@
 
         try {
             const today = localDateStr();
-            const tasks = masterTasks
+            /* Dated steps only — rescheduling moves work between days, and Standby steps
+               aren't on a day to be moved from. */
+            const tasks = datedTasks
                 .filter(t => t.due_date <= addDays(today, 30))
                 .slice(0, 30)
                 .map(t => ({ id: t.id, title: t.title, duration: t.duration, due_date: t.due_date, goal_deadline: t.goal_deadline || null, importance: t.importance }));
@@ -1688,9 +1958,15 @@
     }
 
     async function getRecoveryPlan(projectId, btn) {
+        /* Recovery rearranges work between days, so only dated steps are movable. Standby
+           minutes are sent as context so the model still sees the project's true size —
+           a plan built on the dated half alone would look far more achievable than it is. */
         const steps = masterTasks
-            .filter(t => t.project_id === projectId)
+            .filter(t => t.project_id === projectId && t.due_date)
             .map(t => ({ id: t.id, title: t.title, duration: t.duration, due_date: t.due_date }));
+        const standbyMinutes = poolTasks
+            .filter(t => t.project_id === projectId)
+            .reduce((s,t) => s + t.duration, 0);
         if (!steps.length) return;
 
         const goal = projectNames[projectId] || 'Project';
@@ -1704,7 +1980,7 @@
 
         try {
             const { data, error } = await client.functions.invoke('ai-project-recovery', {
-                body: { goal, deadline, today, steps, dayLimits, existingLoad, overrides }
+                body: { goal, deadline, today, steps, standbyMinutes, dayLimits, existingLoad, overrides }
             });
             if (error) return uiAlert("Recovery plan failed: " + error.message);
             if (!data?.moves?.length) {
