@@ -54,6 +54,11 @@ drop policy if exists "public read/write" on capacity_overrides;
 drop policy if exists "public read/write" on weekly_reviews;
 drop policy if exists "public read/write" on user_settings;
 
+drop policy if exists "owner access" on subtasks;
+drop policy if exists "owner access" on capacity_overrides;
+drop policy if exists "owner access" on weekly_reviews;
+drop policy if exists "owner access" on user_settings;
+
 alter table subtasks enable row level security;
 alter table capacity_overrides enable row level security;
 alter table weekly_reviews enable row level security;

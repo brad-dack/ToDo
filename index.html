@@ -827,8 +827,10 @@
             title: `${activeGoal.goal}: ${t.title}`,
             duration: t.duration,
             due_date: t.due_date,
+            base_due_date: t.due_date,
             importance: parseInt(activeGoal.imp),
             goal_deadline: activeGoal.date,
+            base_goal_deadline: activeGoal.date,
             project_id: activeGoal.id,
             recurrence_rule: activeGoal.recur || null,
             sort_order: idx
@@ -896,10 +898,18 @@
 
         const newBatch = templates.map(t => {
             const { id, created_at, updated_at, ...data } = t;
+            // Shift from the immutable baseline, not the live date, so a pushed/edited
+            // occurrence never drags the next cycle along with it.
+            const baseDue = t.base_due_date || t.due_date;
+            const baseDeadline = t.base_goal_deadline || t.goal_deadline || null;
+            const nextDue = shiftByRule(baseDue, task.recurrence_rule);
+            const nextDeadline = baseDeadline ? shiftByRule(baseDeadline, task.recurrence_rule) : null;
             return {
                 ...data,
-                due_date: shiftByRule(t.due_date, task.recurrence_rule),
-                goal_deadline: t.goal_deadline ? shiftByRule(t.goal_deadline, task.recurrence_rule) : null,
+                due_date: nextDue,
+                base_due_date: nextDue,
+                goal_deadline: nextDeadline,
+                base_goal_deadline: nextDeadline,
                 project_id: newProjId,
                 completed: false
             };
@@ -1026,8 +1036,12 @@
                 <button class="modal-cancel" id="proj-cancel">Cancel</button>
                 <button class="submit-btn" id="proj-save" style="flex:2;">Save</button>
             </div>
-            <span class="field-label" style="display:block; margin-bottom:8px;">Steps (${tasks.length})</span>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                <span class="field-label" style="display:block; margin:0;">Steps (${tasks.length})</span>
+                <button type="button" class="btn-edit" id="proj-add-step" style="font-size:0.8rem;">＋ Add Step</button>
+            </div>
             <div>${stepsHtml}</div>
+            <button type="button" class="btn-bulk" id="proj-clone" style="margin-top:12px;">📋 Clone Into New Project</button>
             <button type="button" class="submit-btn" id="proj-delete" style="background:var(--red); color:white; margin-top:12px;">🗑️ Delete Whole Project</button>`;
 
         node.querySelector('.ep-close-x').onclick = m.close;
@@ -1044,6 +1058,15 @@
             await refresh();
             renderEditProjectBody(projectId, node, m);
         });
+
+        node.querySelector('#proj-add-step').onclick = () => {
+            addStep(projectId, () => renderEditProjectBody(projectId, node, m));
+        };
+
+        node.querySelector('#proj-clone').onclick = async () => {
+            const newId = await cloneProject(projectId, currentName);
+            if (newId) { await refresh(); renderEditProjectBody(newId, node, m); }
+        };
 
         node.querySelector('#proj-delete').onclick = async () => {
             const ok = await uiConfirm(
@@ -1092,6 +1115,86 @@
             m.close();
             refresh();
         };
+    }
+
+    function addStep(projectId, onSaved) {
+        const tasks = masterTasks.filter(t => t.project_id === projectId);
+        if (!tasks.length) return;
+        const ref = tasks[0];
+        const projName = projectNames[projectId] || '';
+        const deadline = ref.goal_deadline || '';
+        const today = localDateStr();
+        const defaultDate = deadline && deadline < today ? deadline : today;
+        const nextSort = tasks.reduce((mx, t) => Math.max(mx, t.sort_order ?? 0), 0) + 1;
+
+        const node = document.createElement('div');
+        node.innerHTML = `
+            <h3 class="modal-title">Add Step</h3>
+            <label class="field-label">Title</label>
+            <input id="add-step-title" placeholder="What needs doing?">
+            <div style="display:grid; grid-template-columns: 38% 1fr; gap:12px;">
+                <div style="min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="add-step-mins" max="15" value="15"></div>
+                <div style="min-width:0;"><label class="field-label">Date</label><input type="date" id="add-step-date" value="${esc(defaultDate)}"${deadline ? ` max="${esc(deadline)}"` : ''}></div>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-cancel">Cancel</button>
+                <button class="submit-btn" id="add-step-save" style="flex:2;">Add</button>
+            </div>`;
+        const m = openModal(node);
+        node.querySelector('.modal-cancel').onclick = m.close;
+        node.querySelector('#add-step-save').onclick = async () => {
+            const title = node.querySelector('#add-step-title').value.trim();
+            const duration = parseInt(node.querySelector('#add-step-mins').value);
+            const date = node.querySelector('#add-step-date').value;
+
+            if (!title) return uiAlert("Step title required.");
+            if (!Number.isFinite(duration) || duration <= 0) return uiAlert("Minutes must be a positive number.");
+            if (duration > 15) return uiAlert("Max 15 mins per step.");
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return uiAlert("Please pick a date.");
+            if (deadline && date > deadline) return uiAlert("Date is past the project deadline.");
+            if (!hasCapacity(date, duration)) return uiAlert("That day is at capacity!");
+
+            const { error } = await dbCall(client.from('subtasks').insert({
+                title: `${projName}: ${title}`,
+                duration,
+                due_date: date,
+                base_due_date: date,
+                importance: ref.importance,
+                goal_deadline: ref.goal_deadline || null,
+                base_goal_deadline: ref.goal_deadline || null,
+                project_id: projectId,
+                recurrence_rule: ref.recurrence_rule || null,
+                sort_order: nextSort
+            }), "Add step");
+            if (error) return;
+            m.close();
+            await refresh();
+            if (onSaved) onSaved();
+        };
+    }
+
+    async function cloneProject(projectId, currentName) {
+        const tasks = masterTasks.filter(t => t.project_id === projectId);
+        if (!tasks.length) return null;
+        const newId = 'proj_' + Date.now();
+        const newName = `${currentName} (Copy)`;
+
+        const batch = tasks.map(t => {
+            const { id, created_at, updated_at, user_id, completed, ...rest } = t;
+            const idx = t.title.indexOf(':');
+            const stepPart = idx > 0 ? t.title.slice(idx) : '';
+            return {
+                ...rest,
+                title: stepPart ? newName + stepPart : newName,
+                project_id: newId,
+                base_due_date: t.base_due_date || t.due_date,
+                base_goal_deadline: t.base_goal_deadline || t.goal_deadline || null,
+                completed: false
+            };
+        });
+        const { error } = await dbCall(client.from('subtasks').insert(batch), "Clone project");
+        if (error) return null;
+        return newId;
     }
 
     async function uncompleteTask(id) {
@@ -1481,6 +1584,36 @@
         }
     }
 
+    /* Guard against the AI over-filling a day. Process moves highest-importance first,
+       accept a move only if the target date still has room, otherwise leave the task put. */
+    function enforceCapacity(moves) {
+        const moveIds = new Set(moves.map(m => String(m.id)));
+        const loadByDate = {};
+        for (const t of masterTasks) {
+            if (moveIds.has(String(t.id))) continue;
+            loadByDate[t.due_date] = (loadByDate[t.due_date] || 0) + t.duration;
+        }
+        const enriched = moves
+            .map(m => ({ m, t: masterTasks.find(x => String(x.id) === String(m.id)) }))
+            .filter(x => x.t && x.m.due_date && x.m.due_date !== x.t.due_date)
+            .sort((a, b) => (b.t.importance - a.t.importance) || (a.m.due_date < b.m.due_date ? -1 : 1));
+
+        const accepted = [];
+        let dropped = 0;
+        for (const { m, t } of enriched) {
+            const target = m.due_date;
+            const used = loadByDate[target] || 0;
+            if (used + t.duration <= dayLimit(target)) {
+                loadByDate[target] = used + t.duration;
+                accepted.push({ id: m.id, due_date: target });
+            } else {
+                loadByDate[t.due_date] = (loadByDate[t.due_date] || 0) + t.duration;
+                dropped++;
+            }
+        }
+        return { accepted, dropped };
+    }
+
     async function applyMoves(moves, { undoable = true } = {}) {
         const previous = [];
         let count = 0, failed = 0;
@@ -1539,8 +1672,13 @@
             if (error) return uiAlert("Smart reschedule failed: " + error.message);
             if (!data?.moves?.length) return uiAlert("Nothing needs rescheduling right now.");
 
-            const ok = await uiConfirm(data.summary || `Reschedule ${data.moves.length} task(s)?`, { title: "Smart Reschedule", okLabel: "Apply" });
-            if (ok) await applyMoves(data.moves);
+            const { accepted, dropped } = enforceCapacity(data.moves);
+            if (!accepted.length) return uiAlert("Nothing needs rescheduling right now.");
+
+            let summary = data.summary || `Reschedule ${accepted.length} task(s)?`;
+            if (dropped) summary += ` (${dropped} left in place to avoid over-filling a day.)`;
+            const ok = await uiConfirm(summary, { title: "Smart Reschedule", okLabel: "Apply" });
+            if (ok) await applyMoves(accepted);
         } catch (err) {
             uiAlert("Smart reschedule failed: " + err.message);
         } finally {
