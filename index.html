@@ -662,7 +662,9 @@
     /* Standby steps passed over this many times get flagged in the UI. */
     const DODGED_THRESHOLD = 5;
 
-    async function refresh() {
+    /* `sweepProject` asks for an immediate allocation pass for one project — see
+       sweepStandby(). Callers that just changed something already on a day pass nothing. */
+    async function refresh({ sweepProject = null } = {}) {
         await loadOverrides();
         const { data: active } = await client.from('subtasks').select('*').eq('completed', false);
         const { data: completed } = await client.from('subtasks').select('*').eq('completed', true).order('updated_at', { ascending: false }).limit(5);
@@ -673,7 +675,7 @@
 
         /* Allocate today's spare capacity from Standby before anything renders, so the
            first thing shown is already the real plan for the day. */
-        if (await sweepStandby()) {
+        if (await sweepStandby({ project: sweepProject })) {
             sortMasterTasks();
             splitTaskLists();
             computeProjectStates();
@@ -796,14 +798,23 @@
 
     /* Fills today's leftover capacity from the top of the Standby ranking. Runs once per
        day: the allocation is the morning's decision, not something that re-triggers and
-       tops the day back up every time a task is ticked off. */
-    async function sweepStandby() {
+       tops the day back up every time a task is ticked off.
+
+       `project` overrides that guard for one project. Ticking a task off and putting new
+       work in the pool both leave the day with spare minutes, but they are opposite cases:
+       the first is the treadmill the daily guard exists to prevent, the second is a
+       project that has never had a chance to be allocated at all — making it wait until
+       tomorrow is just a stale plan. Only the named project's next step is eligible on a
+       forced pass, so adding one step never drags the rest of the backlog in with it. */
+    async function sweepStandby({ project = null } = {}) {
         const todayStr = localDateStr();
         let changed = await reclaimStaleAutoPlacements(todayStr);
         if (changed) splitTaskLists();
 
-        if (localStorage.getItem(SWEEP_KEY) === todayStr) return changed;
-        localStorage.setItem(SWEEP_KEY, todayStr);
+        if (!project) {
+            if (localStorage.getItem(SWEEP_KEY) === todayStr) return changed;
+            localStorage.setItem(SWEEP_KEY, todayStr);
+        }
         if (!poolTasks.length) return changed;
 
         const todayLoad = datedTasks
@@ -814,7 +825,9 @@
         /* Snapshot the ranking up front: one step per project per day. Unlocking the next
            step in a sequence the moment its predecessor lands would dump a whole project
            into a single day. */
-        const candidates = rankedStandby().filter(r => r.task.last_offered !== todayStr);
+        const candidates = rankedStandby()
+            .filter(r => r.task.last_offered !== todayStr)
+            .filter(r => !project || r.task.project_id === project);
 
         for (const { task } of candidates) {
             if (remaining <= 0) break;
@@ -1012,6 +1025,7 @@
     }
 
     async function finalisePlanning() {
+        const newProjectId = activeGoal.id;
         const toInsert = stagingTasks.map((t, idx) => ({
             title: `${activeGoal.goal}: ${t.title}`,
             duration: t.duration,
@@ -1041,7 +1055,9 @@
 
             cancelPlanning();
             showScreen('home');
-            refresh();
+            /* A brand-new project's Standby steps get allocated straight away rather than
+               waiting for tomorrow's sweep — you committed to it just now. */
+            refresh({ sweepProject: newProjectId });
         }
     }
 
@@ -1351,7 +1367,7 @@
         node.querySelector('#proj-clear-dates').onclick = async () => {
             if (!datedSteps.length) return uiAlert("None of these steps have a date — they're all in Standby already.");
             const ok = await uiConfirm(
-                `${datedSteps.length} step${datedSteps.length === 1 ? '' : 's'} will lose their date and go back to 🅿️ Standby, to be allocated to spare capacity each morning in sequence order. The project deadline is unchanged.`,
+                `${datedSteps.length} step${datedSteps.length === 1 ? '' : 's'} will lose their date and go back to 🅿️ Standby. The next one is allocated to today's spare capacity right away if there's room; the rest follow each morning in sequence order. The project deadline is unchanged.`,
                 { title: 'Clear all step dates?', okLabel: 'Clear dates' }
             );
             if (!ok) return;
@@ -1359,7 +1375,8 @@
                 due_date: null, auto_placed: false, updated_at: new Date().toISOString()
             }).eq('project_id', projectId).eq('completed', false), "Clear step dates");
             if (error) return;
-            await refresh();
+            /* Handing the project back to the app should get an answer today, not tomorrow. */
+            await refresh({ sweepProject: projectId });
             renderEditProjectBody(projectId, node, m);
         };
 
@@ -1381,7 +1398,7 @@
 
         node.querySelector('#proj-clone').onclick = async () => {
             const newId = await cloneProject(projectId, currentName);
-            if (newId) { await refresh(); renderEditProjectBody(newId, node, m); }
+            if (newId) { await refresh({ sweepProject: newId }); renderEditProjectBody(newId, node, m); }
         };
 
         node.querySelector('#proj-delete').onclick = async () => {
@@ -1488,7 +1505,7 @@
             }), "Add step");
             if (error) return;
             m.close();
-            await refresh();
+            await refresh({ sweepProject: projectId });
             if (onSaved) onSaved();
         };
     }
