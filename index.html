@@ -238,7 +238,7 @@
             <div style="background:#e8f4ff; border:2px solid var(--ink); border-radius:12px; padding:12px; margin-bottom:14px;">
                 <span class="field-label" style="display:block; margin-bottom:8px;">Manual entry</span>
                 <div><label class="field-label">Project Name</label><input id="mainGoal" placeholder="Project Name"></div>
-                <div><label class="field-label">Deadline</label><input type="date" id="goalDate" class="full-date"></div>
+                <div><label class="field-label">Deadline</label><input type="date" id="goalDate" class="full-date" required></div>
                 <div style="margin-bottom:0;">
                     <label class="field-label">Importance</label>
                     <input type="hidden" id="mainImp" value="5">
@@ -1341,13 +1341,23 @@
                 : `<small style="display:block; opacity:0.55; font-weight:700; margin-bottom:8px;">Drag ☰ to re-order. Standby allocates a project's steps in this order.</small>`)
             : `<small style="display:block; opacity:0.55; font-weight:700; margin-bottom:8px;">Showing date order. Switch to sequence to re-order steps.</small>`;
 
+        /* This body re-renders mid-edit — toggling the step view, saving a step, re-ordering.
+           Carry any unsaved field values across so they aren't silently reverted under the
+           user. Only for the same project: cloning re-renders onto a different one. */
+        const prev = node.dataset.projectId === projectId && node.querySelector('#proj-name') ? {
+            name: node.querySelector('#proj-name').value,
+            date: node.querySelector('#proj-date').value,
+            imp: node.querySelector('#proj-imp').value,
+            recur: node.querySelector('#proj-recur').value
+        } : null;
+
         node.innerHTML = `
             <button class="modal-close ep-close-x">✕</button>
             <h3 class="modal-title">Edit Project</h3>
             <label class="field-label">Project Name</label>
             <input id="proj-name" value="${esc(currentName)}">
             <label class="field-label">Deadline</label>
-            <input type="date" id="proj-date" value="${esc(deadline)}">
+            <input type="date" id="proj-date" value="${esc(deadline)}" required>
             <label class="field-label">Importance (all steps)</label>
             <select id="proj-imp">${impOpts}</select>
             <label class="field-label">Recurrence (all steps)</label>
@@ -1370,8 +1380,48 @@
             <button type="button" class="btn-bulk" id="proj-clone" style="margin-top:12px;">📋 Clone Into New Project</button>
             <button type="button" class="submit-btn" id="proj-delete" style="background:var(--red); color:white; margin-top:12px;">🗑️ Delete Whole Project</button>`;
 
+        node.dataset.projectId = projectId;
+        if (prev) {
+            node.querySelector('#proj-name').value = prev.name;
+            if (prev.date) node.querySelector('#proj-date').value = prev.date;
+            node.querySelector('#proj-imp').value = prev.imp;
+            node.querySelector('#proj-recur').value = prev.recur;
+        }
+
         node.querySelector('.ep-close-x').onclick = m.close;
         node.querySelector('#proj-cancel').onclick = m.close;
+
+        /* A project with no deadline can never register as urgent — tightness has no window
+           to measure against — so it would sit at the bottom of Standby indefinitely. The
+           browser's own date picker offers to clear the field; put the deadline straight
+           back if it does. Save still refuses an empty one as a backstop. */
+        const projDate = node.querySelector('#proj-date');
+        projDate.addEventListener('change', () => { if (!projDate.value && deadline) projDate.value = deadline; });
+
+        /* Step dates are checked against the project's *saved* deadline, so a new deadline
+           typed but not yet saved would make its own steps look out of range — you'd have to
+           save, reopen, and only then move the steps. Commit the deadline before opening a
+           step editor so moving a deadline out and rescheduling behind it is one pass. Step
+           edits and deletions in this modal already write immediately, so the deadline
+           behaving the same way is consistent rather than surprising. */
+        async function commitPendingDeadline() {
+            const pending = projDate.value;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(pending)) { await uiAlert("Please pick a deadline first."); return false; }
+            if (pending === deadline) return true;
+
+            const late = tasks.filter(t => t.due_date && t.due_date > pending);
+            if (late.length && !await uiConfirm(
+                `${late.length} step${late.length === 1 ? ' is' : 's are'} scheduled after ${formatDate(pending)}. Move the deadline anyway?`,
+                { title: 'Steps past deadline' })) return false;
+
+            const { error } = await dbCall(client.from('subtasks')
+                .update({ goal_deadline: pending, updated_at: new Date().toISOString() })
+                .eq('project_id', projectId), "Edit deadline");
+            if (error) return false;
+            await refresh();
+            renderEditProjectBody(projectId, node, m);
+            return true;
+        }
 
         node.querySelector('#proj-order-toggle').onclick = () => {
             editProjectOrder = seqMode ? 'date' : 'sequence';
@@ -1419,8 +1469,10 @@
             renderEditProjectBody(projectId, node, m);
         };
 
-        node.querySelectorAll('.ps-edit').forEach(b => b.onclick = () => {
-            editTask(b.dataset.id, () => renderEditProjectBody(projectId, node, m));
+        node.querySelectorAll('.ps-edit').forEach(b => b.onclick = async () => {
+            const id = b.dataset.id;
+            if (!await commitPendingDeadline()) return;
+            editTask(id, () => renderEditProjectBody(projectId, node, m));
         });
 
         node.querySelectorAll('.ps-del').forEach(b => b.onclick = async () => {
@@ -1431,7 +1483,8 @@
             renderEditProjectBody(projectId, node, m);
         });
 
-        node.querySelector('#proj-add-step').onclick = () => {
+        node.querySelector('#proj-add-step').onclick = async () => {
+            if (!await commitPendingDeadline()) return;
             addStep(projectId, () => renderEditProjectBody(projectId, node, m));
         };
 
