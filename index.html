@@ -714,6 +714,14 @@
         return streak;
     }
 
+    /* The day a step's minutes actually have to come out of. Work that was due before today
+       hasn't gone anywhere — it still needs doing, and the only day left to do it in is
+       today. Everything that asks "how much is loaded on this date" counts it against today,
+       so today's capacity, the Standby sweep and the at-risk maths all see the backlog
+       instead of stepping around it. The step keeps its original due_date, so the list can
+       still show how late it is. */
+    const loadDay = (t, todayStr) => (t.due_date && t.due_date < todayStr ? todayStr : t.due_date);
+
     const daysInclusive = (fromStr, toStr) =>
         Math.max(1, Math.round((parseDateUTC(toStr) - parseDateUTC(fromStr)) / 86400000) + 1);
 
@@ -737,11 +745,12 @@
     /* Free minutes between today and `deadline`, ignoring work that belongs to `pid`
        (a project's own steps aren't an obstacle to scheduling that project). */
     function capacityPool(deadline, pid) {
-        let pool = 0, cursor = localDateStr();
+        const todayStr = localDateStr();
+        let pool = 0, cursor = todayStr;
         while (cursor <= deadline) {
             const limit = dayLimit(cursor, 0);
             const otherLoad = masterTasks
-                .filter(t => t.due_date === cursor && t.project_id !== pid)
+                .filter(t => t.project_id !== pid && loadDay(t, todayStr) === cursor)
                 .reduce((s,t) => s + t.duration, 0);
             pool += Math.max(0, limit - otherLoad);
             cursor = addDays(cursor, 1);
@@ -845,8 +854,10 @@
         }
         if (!poolTasks.length) return changed;
 
+        /* Overdue work counts against today, so the sweep won't pile Standby steps on top
+           of a backlog it can already see. */
         const todayLoad = datedTasks
-            .filter(t => t.due_date === todayStr)
+            .filter(t => loadDay(t, todayStr) === todayStr)
             .reduce((s,t) => s + t.duration, 0);
         let remaining = Math.max(0, dayLimit(todayStr) - todayLoad);
 
@@ -929,7 +940,10 @@
 
         const todayStr = localDateStr();
         const load = {};
-        for (const t of datedTasks) load[t.due_date] = (load[t.due_date] || 0) + t.duration;
+        for (const t of datedTasks) {
+            const d = loadDay(t, todayStr);
+            load[d] = (load[d] || 0) + t.duration;
+        }
 
         const queue = rankedStandby().map(r => r.task);
         let cursor = todayStr;
@@ -967,9 +981,10 @@
     };
 
     function hasCapacity(dateStr, taskDuration, ignoreTaskId = null) {
+        const todayStr = localDateStr();
         const limit = dayLimit(dateStr);
         const currentLoad = masterTasks
-            .filter(t => t.due_date === dateStr && t.id !== ignoreTaskId)
+            .filter(t => t.id !== ignoreTaskId && loadDay(t, todayStr) === dateStr)
             .reduce((s, t) => s + t.duration, 0);
         return (currentLoad + taskDuration) <= limit;
     }
@@ -1139,7 +1154,10 @@
         if (!t) return;
         /* A Standby step has no day to push off; deferring is its equivalent. */
         if (!t.due_date) return uiAlert("This step is in Standby — it has no date to push.");
-        const targetDateStr = addDays(t.due_date, 1);
+        /* Push from today for anything already overdue: adding a day to a date that has been
+           and gone just lands on another past day. */
+        const todayStr = localDateStr();
+        const targetDateStr = addDays(t.due_date < todayStr ? todayStr : t.due_date, 1);
 
         if (!hasCapacity(targetDateStr, t.duration, t.id)) return uiAlert(`${formatDate(targetDateStr)} is already at capacity!`);
 
@@ -1673,7 +1691,9 @@
     }
 
     function renderDayModalBody(dateStr, node) {
-        const tasks = masterTasks.filter(t => t.due_date === dateStr).sort((a,b) => b.importance - a.importance);
+        const todayStr = localDateStr();
+        /* On today this also picks up anything still outstanding from earlier days. */
+        const tasks = masterTasks.filter(t => loadDay(t, todayStr) === dateStr).sort((a,b) => b.importance - a.importance);
         const load = tasks.reduce((s,t) => s + t.duration, 0);
         const limit = dayLimit(dateStr);
         const over = dateStr in capacityOverrides;
@@ -1741,7 +1761,8 @@
         const next = Math.max(0, dayLimit(dateStr) + delta);
 
         if (delta < 0) {
-            const dayTasks = masterTasks.filter(t => t.due_date === dateStr).sort((a,b) => a.importance - b.importance);
+            const todayStr = localDateStr();
+            const dayTasks = masterTasks.filter(t => loadDay(t, todayStr) === dateStr).sort((a,b) => a.importance - b.importance);
             const load = dayTasks.reduce((s,t) => s + t.duration, 0);
             if (load > next) {
                 let excess = load - next;
@@ -1789,11 +1810,13 @@
         const greeting = hour < 12 ? 'Good morning! ☀️' : hour < 18 ? 'Good afternoon! 👋' : 'Good evening! 🌙';
         document.getElementById('greeting').innerText = greeting;
 
-        const todayTasks = masterTasks.filter(t => t.due_date === todayStr);
+        const todayTasks = masterTasks.filter(t => loadDay(t, todayStr) === todayStr);
+        const overdueCount = todayTasks.filter(t => t.due_date < todayStr).length;
         const todayLoad = todayTasks.reduce((s,t) => s + t.duration, 0);
         const todayLimit = dayLimit(todayStr);
         const remaining = Math.max(0, todayLimit - todayLoad);
-        document.getElementById('todaySummary').innerText = `${todayTasks.length} action${todayTasks.length===1?'':'s'} today · ${remaining} min${remaining===1?'':'s'} left in the tank`;
+        document.getElementById('todaySummary').innerText =
+            `${todayTasks.length} action${todayTasks.length===1?'':'s'} today${overdueCount ? ` (${overdueCount} overdue)` : ''} · ${remaining} min${remaining===1?'':'s'} left in the tank`;
 
         document.getElementById('streakChip').innerText = `🔥 ${streakCount} DAY STREAK`;
 
@@ -1801,7 +1824,7 @@
         bar.innerHTML = Array.from({length: 7}, (_, i) => {
             const dateStr = addDays(todayStr, i);
             const dow = dayOfWeek(dateStr);
-            const load = masterTasks.filter(t => t.due_date === dateStr).reduce((s, t) => s + t.duration, 0);
+            const load = masterTasks.filter(t => loadDay(t, todayStr) === dateStr).reduce((s, t) => s + t.duration, 0);
             const limit = dayLimit(dateStr);
             // 960 awake mins/day. A capacity minute is "worth" 5x a non-capacity minute,
             // so the dark grey (life) and white/colour (capacity) zones split accordingly.
@@ -1905,21 +1928,29 @@
             document.getElementById('masterToDo').innerHTML = `<p style="opacity:0.6; font-weight:700; text-align:center;">No matches for "${esc(query)}"</p>`;
             return;
         }
+        const todayStr = localDateStr();
         document.getElementById('masterToDo').innerHTML = tasks.map(t => {
             const impClass = `imp-${Math.min(10, Math.max(1, parseInt(t.importance) || 1))}`;
             const standby = !t.due_date;
             const dc = t.defer_count || 0;
+            /* A step past its own day, regardless of whether the project deadline has gone.
+               Its minutes are counted against today, so say so on the row too. */
+            const late = !standby && t.due_date < todayStr;
+            const lateDays = late ? Math.round((parseDateUTC(todayStr) - parseDateUTC(t.due_date)) / 86400000) : 0;
             const when = standby
                 ? (projected[t.id] ? `≈ ${formatDate(projected[t.id])}` : 'no gap in sight')
-                : formatDate(t.due_date);
+                : `${formatDate(t.due_date)}${late ? ` · ${lateDays} day${lateDays === 1 ? '' : 's'} late` : ''}`;
             const mark = standby ? ` <span class="badge">🅿️ STANDBY</span>`
                 : t.auto_placed ? ` <span class="badge">🅿️ ALLOCATED</span>` : '';
+            /* The step's own lateness is the more specific fact, so it replaces the
+               project-level badge rather than sitting next to a second OVERDUE. */
+            const flag = late ? ` <span class="badge badge-overdue">OVERDUE</span>` : stateBadge(t.project_id);
             return `
-            <div class="todo-item${stateRowClass(t.project_id)}">
+            <div class="todo-item${late ? ' todo-overdue' : stateRowClass(t.project_id)}">
                 <div class="imp-chip ${impClass}">${esc(t.importance)}</div>
                 <div style="flex:1; min-width:0;">
                     <b>${esc(t.title)}</b><br>
-                    <small>${esc(when)} • ${t.duration}m${dc ? ` · passed over ${dc}×` : ''}</small>${stateBadge(t.project_id)}${mark}${dc >= DODGED_THRESHOLD ? ` <span class="badge badge-overdue">DODGED</span>` : ''}
+                    <small>${esc(when)} • ${t.duration}m${dc ? ` · passed over ${dc}×` : ''}</small>${flag}${mark}${dc >= DODGED_THRESHOLD ? ` <span class="badge badge-overdue">DODGED</span>` : ''}
                 </div>
                 <div style="display:flex; gap:6px; align-items:center;">
                     ${t.auto_placed ? `<button class="btn-edit" title="Back to Standby" data-id="${esc(t.id)}" data-act="defer">🅿️</button>` : ''}
@@ -2040,8 +2071,9 @@
         for (const t of masterTasks) {
             if (t.project_id === excludeProjectId) continue;
             if (!t.due_date) continue; // Standby steps aren't on a day, so they add no load.
-            if (t.due_date >= today && t.due_date <= windowEnd) {
-                loadByDate[t.due_date] = (loadByDate[t.due_date] || 0) + t.duration;
+            const d = loadDay(t, today);
+            if (d >= today && d <= windowEnd) {
+                loadByDate[d] = (loadByDate[d] || 0) + t.duration;
             }
         }
         const existingLoad = Object.entries(loadByDate).map(([date, minutes]) => ({ date, minutes }));
@@ -2092,12 +2124,14 @@
     /* Guard against the AI over-filling a day. Process moves highest-importance first,
        accept a move only if the target date still has room, otherwise leave the task put. */
     function enforceCapacity(moves) {
+        const todayStr = localDateStr();
         const moveIds = new Set(moves.map(m => String(m.id)));
         const loadByDate = {};
         for (const t of masterTasks) {
             if (moveIds.has(String(t.id))) continue;
             if (!t.due_date) continue; // Standby steps occupy no day, so they add no load.
-            loadByDate[t.due_date] = (loadByDate[t.due_date] || 0) + t.duration;
+            const d = loadDay(t, todayStr);
+            loadByDate[d] = (loadByDate[d] || 0) + t.duration;
         }
         const enriched = moves
             .map(m => ({ m, t: masterTasks.find(x => String(x.id) === String(m.id)) }))
