@@ -969,15 +969,21 @@
         return projected;
     }
 
+    /* Project-level trouble, which is a different thing from a step being late — a project
+       can be past its deadline while a step of it is still days away, and calling both of
+       those "OVERDUE" made steps dated next week look like they needed doing yesterday.
+       OVERDUE is now reserved for a step past its own day; the project says DEADLINE PASSED.
+       Same split on the row tint: red means this step is late, amber means its project is
+       in trouble. */
     const stateBadge = (pid) => {
         const s = projectStates[pid];
-        if (s === 'overdue') return ' <span class="badge badge-overdue">OVERDUE</span>';
+        if (s === 'overdue') return ' <span class="badge badge-overdue">DEADLINE PASSED</span>';
         if (s === 'at-risk') return ' <span class="badge badge-atrisk">AT RISK</span>';
         return '';
     };
     const stateRowClass = (pid) => {
         const s = projectStates[pid];
-        return s === 'overdue' ? ' todo-overdue' : s === 'at-risk' ? ' todo-atrisk' : '';
+        return (s === 'overdue' || s === 'at-risk') ? ' todo-atrisk' : '';
     };
 
     function hasCapacity(dateStr, taskDuration, ignoreTaskId = null) {
@@ -1871,12 +1877,15 @@
             queue.innerHTML = `<div class="focus-card"><span class="focus-eyebrow">▶ Up Next</span><div class="focus-title">All clear! 🎉</div><div class="focus-meta">${waiting}</div></div>`;
             return;
         }
+        const todayStr = localDateStr();
+        const lateBadge = (t) => (t.due_date && t.due_date < todayStr)
+            ? ` <span class="badge badge-overdue">OVERDUE</span>` : '';
         const [first, second, third] = datedTasks;
         const f = splitTitle(first.title);
         let html = `<div class="focus-card">
             <span class="focus-eyebrow">▶ Up Next</span>
             <div class="focus-title">${esc(f.name)}</div>
-            <div class="focus-meta">${esc(f.proj)}${stateBadge(first.project_id)} · ${first.duration}m · ${first.auto_placed ? 'allocated from 🅿️ Standby' : `due ${formatDate(first.due_date)}`}</div>
+            <div class="focus-meta">${esc(f.proj)}${lateBadge(first)}${stateBadge(first.project_id)} · ${first.duration}m · ${first.auto_placed ? 'allocated from 🅿️ Standby' : `due ${formatDate(first.due_date)}`}</div>
             <div class="focus-actions">
                 <button class="btn-big btn-go" data-id="${esc(first.id)}" data-act="complete">Done ✓</button>
                 ${first.auto_placed
@@ -1888,7 +1897,7 @@
         </div>`;
         [[second, '2ND'], [third, '3RD']].forEach(([t, label]) => {
             if (!t) return;
-            html += `<div class="queue-peek"><span class="queue-pos">${label}</span><span style="flex:1; min-width:0;">${esc(t.title)}${stateBadge(t.project_id)}</span><span class="qm">${t.duration}m</span></div>`;
+            html += `<div class="queue-peek"><span class="queue-pos">${label}</span><span style="flex:1; min-width:0;">${esc(t.title)}${lateBadge(t)}${stateBadge(t.project_id)}</span><span class="qm">${t.duration}m</span></div>`;
         });
         queue.innerHTML = html;
     }
@@ -1942,9 +1951,8 @@
                 : `${formatDate(t.due_date)}${late ? ` · ${lateDays} day${lateDays === 1 ? '' : 's'} late` : ''}`;
             const mark = standby ? ` <span class="badge">🅿️ STANDBY</span>`
                 : t.auto_placed ? ` <span class="badge">🅿️ ALLOCATED</span>` : '';
-            /* The step's own lateness is the more specific fact, so it replaces the
-               project-level badge rather than sitting next to a second OVERDUE. */
-            const flag = late ? ` <span class="badge badge-overdue">OVERDUE</span>` : stateBadge(t.project_id);
+            /* Both facts can be true at once and they no longer read as duplicates. */
+            const flag = (late ? ` <span class="badge badge-overdue">OVERDUE</span>` : '') + stateBadge(t.project_id);
             return `
             <div class="todo-item${late ? ' todo-overdue' : stateRowClass(t.project_id)}">
                 <div class="imp-chip ${impClass}">${esc(t.importance)}</div>
@@ -2142,6 +2150,13 @@
         let dropped = 0;
         for (const { m, t } of enriched) {
             const target = m.due_date;
+            /* Never reschedule a step past its own project deadline — that is one of the ways
+               steps end up dated after the deadline they belong to. */
+            if (t.goal_deadline && target > t.goal_deadline) {
+                if (t.due_date) loadByDate[t.due_date] = (loadByDate[t.due_date] || 0) + t.duration;
+                dropped++;
+                continue;
+            }
             const used = loadByDate[target] || 0;
             if (used + t.duration <= dayLimit(target)) {
                 loadByDate[target] = used + t.duration;
