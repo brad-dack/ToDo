@@ -209,7 +209,7 @@
             <span class="section-title" style="margin-top:0;">🅿️ Standby</span>
             <div style="font-weight:800; font-size:0.8rem; opacity:0.65; margin-bottom:12px;" id="standbySummary"></div>
             <div id="standbyList"></div>
-            <small style="display:block; opacity:0.55; font-weight:700; margin-top:4px;">Ordered by deadline pressure, not preference. Each morning your spare capacity is filled from the top of this list — there's nothing to pick here on purpose.</small>
+            <small style="display:block; opacity:0.55; font-weight:700; margin-top:4px;">Ordered by importance, weighted by how much of its window each project has left — pressure builds on its own as a deadline nears, so a smaller job that's running out of time climbs above a bigger one that still has room. Your spare capacity is filled from the top of this list, in sequence — there's nothing to pick here on purpose.</small>
         </div>
 
         <span class="section-title">📋 Active ToDo List</span>
@@ -654,7 +654,7 @@
         if (!error && data) data.forEach(r => { capacityOverrides[r.date] = r.limit_override; });
     }
 
-    let projectStates = {}, projectNames = {}, projectTightness = {};
+    let projectStates = {}, projectNames = {}, projectTightness = {}, projectImportance = {}, projectPriority = {};
     const recoveryAttempted = new Set();
     /* Finite stand-in for "can't fit / already overdue", so tightness stays safe to do
        arithmetic on in sort comparators (Infinity - Infinity is NaN). */
@@ -721,10 +721,28 @@
         return streak;
     }
 
+    const daysInclusive = (fromStr, toStr) =>
+        Math.max(1, Math.round((parseDateUTC(toStr) - parseDateUTC(fromStr)) / 86400000) + 1);
+
+    /* Standby minutes sit on no date, so they never show up as a day's load — but they are
+       still committed work competing for the same window. Count another project's Standby
+       minutes against this window in proportion to how much of that project's own window
+       this one covers: a backlog due inside our window competes in full, one due well
+       beyond it competes only for its share. Without this, a pile of undated work reads as
+       free and every project looks like it has room it doesn't have. */
+    function standbyContention(deadline, pid) {
+        const today = localDateStr();
+        const ourDays = daysInclusive(today, deadline);
+        let total = 0;
+        for (const t of poolTasks) {
+            if (t.project_id === pid || !t.goal_deadline) continue;
+            total += t.duration * Math.min(1, ourDays / daysInclusive(today, t.goal_deadline));
+        }
+        return total;
+    }
+
     /* Free minutes between today and `deadline`, ignoring work that belongs to `pid`
-       (a project's own steps aren't an obstacle to scheduling that project). Note this
-       never looks at whether pid's steps are dated — it is purely "how much room is
-       there in the window", which is what makes Standby steps work here unchanged. */
+       (a project's own steps aren't an obstacle to scheduling that project). */
     function capacityPool(deadline, pid) {
         let pool = 0, cursor = localDateStr();
         while (cursor <= deadline) {
@@ -735,11 +753,23 @@
             pool += Math.max(0, limit - otherLoad);
             cursor = addDays(cursor, 1);
         }
-        return pool;
+        return Math.max(0, pool - standbyContention(deadline, pid));
     }
 
+    /* Standby ranking = importance scaled by time pressure. A project with room to spare
+       ranks on importance alone; as its window fills, the multiplier climbs — 1× with room,
+       4× when the work only just fits, 5.5× once it can't — so a project running out of
+       time overtakes more important work that still has slack. The gain is set so a job has
+       to be roughly five times less important to be overtaken on urgency alone: importance
+       still leads, urgency promotes. Capped, so being weeks overdue is no more urgent than
+       being a day overdue and one stalled project can't own the top of the list forever. */
+    const URGENCY_CAP = 1.5, URGENCY_GAIN = 3;
+    const priorityScore = (importance, tightness) =>
+        Math.min(10, Math.max(1, parseInt(importance) || 1)) *
+        (1 + URGENCY_GAIN * Math.min(tightness ?? 0, URGENCY_CAP));
+
     function computeProjectStates() {
-        projectStates = {}; projectNames = {}; projectTightness = {};
+        projectStates = {}; projectNames = {}; projectTightness = {}; projectImportance = {}; projectPriority = {};
         const todayStr = localDateStr();
 
         const byProject = {};
@@ -747,6 +777,7 @@
             if (!t.project_id) continue;
             if (!byProject[t.project_id]) byProject[t.project_id] = { tasks: [], goal_deadline: t.goal_deadline };
             byProject[t.project_id].tasks.push(t);
+            projectImportance[t.project_id] = Math.max(projectImportance[t.project_id] ?? 0, parseInt(t.importance) || 1);
             if (!projectNames[t.project_id] && t.title) {
                 const idx = t.title.indexOf(':');
                 projectNames[t.project_id] = idx > 0 ? t.title.slice(0, idx) : t.title;
@@ -766,6 +797,10 @@
                its own as a deadline nears, so nothing has to be prioritised by hand. */
             projectTightness[pid] = pool > 0 ? Math.min(MAX_TIGHTNESS, projectMinutes / pool) : MAX_TIGHTNESS;
             projectStates[pid] = projectMinutes > pool ? 'at-risk' : 'normal';
+        }
+
+        for (const pid of Object.keys(byProject)) {
+            projectPriority[pid] = priorityScore(projectImportance[pid], projectTightness[pid]);
         }
     }
 
@@ -822,20 +857,22 @@
             .reduce((s,t) => s + t.duration, 0);
         let remaining = Math.max(0, dayLimit(todayStr) - todayLoad);
 
-        /* Snapshot the ranking up front: one step per project per day. Unlocking the next
-           step in a sequence the moment its predecessor lands would dump a whole project
-           into a single day. */
-        const candidates = rankedStandby()
-            .filter(r => r.task.last_offered !== todayStr)
-            .filter(r => !project || r.task.project_id === project);
-
-        for (const { task } of candidates) {
+        /* Take steps in rank order until the day is full. A project can get several steps in
+           one day — if it is the most pressured thing you have, that is where the day should
+           go — but never out of sequence: a step that was deferred today, or that doesn't fit
+           in what's left, blocks the rest of its project rather than letting a later step
+           jump ahead of it. The ranking is snapshotted, so placing a step can't reshuffle
+           what follows it. */
+        const blocked = new Set();
+        for (const { task, key } of rankedStandby()) {
             if (remaining <= 0) break;
-            if (task.duration > remaining) continue;
+            if (project && task.project_id !== project) continue;
+            if (blocked.has(key)) continue;
+            if (task.last_offered === todayStr || task.duration > remaining) { blocked.add(key); continue; }
             const { error } = await client.from('subtasks')
                 .update({ due_date: todayStr, auto_placed: true, last_offered: todayStr, updated_at: new Date().toISOString() })
                 .eq('id', task.id);
-            if (error) continue;
+            if (error) { blocked.add(key); continue; }
             Object.assign(task, { due_date: todayStr, auto_placed: true, last_offered: todayStr });
             remaining -= task.duration;
             changed = true;
@@ -864,20 +901,22 @@
         refresh();
     }
 
-    /* Standby ordering, derived rather than chosen. Only a project's next undated step is
-       eligible, so a sequence (sand, then prime, then paint) can't be jumped. */
+    /* Standby ordering, derived rather than chosen: every undated step ranked by its
+       project's priority score. Steps of one project share that score, so sort_order breaks
+       the tie and a sequence (sand, then prime, then paint) still can't be jumped — and
+       when two projects tie the shared sort_order interleaves them a step at a time. */
     function rankedStandby() {
-        const nextByProject = {};
-        for (const t of poolTasks) {
-            const key = t.project_id || `solo_${t.id}`;
-            const cur = nextByProject[key];
-            if (!cur || (t.sort_order ?? 0) < (cur.sort_order ?? 0)) nextByProject[key] = t;
-        }
-        return Object.values(nextByProject)
-            .map(task => ({ task, tightness: projectTightness[task.project_id] ?? 0 }))
+        return poolTasks
+            .map(task => ({
+                task,
+                key: task.project_id || `solo_${task.id}`,
+                score: task.project_id
+                    ? (projectPriority[task.project_id] ?? priorityScore(task.importance, 0))
+                    : priorityScore(task.importance, 0)
+            }))
             .sort((a,b) =>
-                (b.tightness - a.tightness) ||
-                (b.task.importance - a.task.importance) ||
+                (b.score - a.score) ||
+                ((a.task.sort_order ?? 0) - (b.task.sort_order ?? 0)) ||
                 ((b.task.defer_count || 0) - (a.task.defer_count || 0))
             );
     }
@@ -1795,9 +1834,11 @@
                 pid,
                 tasks: tasks.slice().sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
                 tightness: projectTightness[pid] ?? 0,
+                importance: projectImportance[pid] ?? tasks[0].importance,
+                priority: projectPriority[pid] ?? priorityScore(tasks[0].importance, 0),
                 deadline: tasks[0].goal_deadline
             }))
-            .sort((a,b) => b.tightness - a.tightness);
+            .sort((a,b) => (b.priority - a.priority) || (b.tightness - a.tightness));
 
         document.getElementById('standbyList').innerHTML = ordered.map(g => {
             const name = projectNames[g.pid] || splitTitle(g.tasks[0].title).proj || 'Unfiled';
@@ -1821,8 +1862,10 @@
                 </div>`;
             }).join('');
 
+            const impCls = `imp-${Math.min(10, Math.max(1, parseInt(g.importance) || 1))}`;
             return `<div style="margin-bottom:16px;">
-                <div style="display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+                <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+                    <div class="imp-chip ${impCls}" style="width:24px;height:24px;font-size:0.7rem;">${esc(g.importance)}</div>
                     <b style="font-size:0.9rem;">${esc(name)}</b>
                     <small style="opacity:0.6;">due ${formatDate(g.deadline)}</small>
                     <span class="badge ${pressureCls}">${pressure}</span>
