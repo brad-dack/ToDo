@@ -648,7 +648,15 @@
         if (!error && data) data.forEach(r => { capacityOverrides[r.date] = r.limit_override; });
     }
 
-    let projectStates = {}, projectNames = {}, projectTightness = {}, projectImportance = {}, projectPriority = {};
+    let projectStates = {}, projectNames = {}, projectTightness = {}, projectImportance = {}, projectPriority = {}, projectDeadlines = {};
+
+    /* goal_deadline is a project-level fact stored on every one of its rows, so the rows can
+       disagree — a multi-row update that half-failed, or an older recurrence cycle. Reading
+       whichever row happened to sort first made the project's state arbitrary, and a single
+       stale row could report a healthy project as past its deadline. Take the latest: a
+       deadline only ever moves outwards, so the newest value is the intended one. */
+    const projectDeadlineOf = (tasks) => tasks.reduce(
+        (mx, t) => (t.goal_deadline && (!mx || t.goal_deadline > mx) ? t.goal_deadline : mx), null);
     const recoveryAttempted = new Set();
     /* Finite stand-in for "can't fit / already overdue", so tightness stays safe to do
        arithmetic on in sort comparators (Infinity - Infinity is NaN). */
@@ -771,13 +779,13 @@
         (1 + URGENCY_GAIN * Math.min(tightness ?? 0, URGENCY_CAP));
 
     function computeProjectStates() {
-        projectStates = {}; projectNames = {}; projectTightness = {}; projectImportance = {}; projectPriority = {};
+        projectStates = {}; projectNames = {}; projectTightness = {}; projectImportance = {}; projectPriority = {}; projectDeadlines = {};
         const todayStr = localDateStr();
 
         const byProject = {};
         for (const t of masterTasks) {
             if (!t.project_id) continue;
-            if (!byProject[t.project_id]) byProject[t.project_id] = { tasks: [], goal_deadline: t.goal_deadline };
+            if (!byProject[t.project_id]) byProject[t.project_id] = { tasks: [] };
             byProject[t.project_id].tasks.push(t);
             projectImportance[t.project_id] = Math.max(projectImportance[t.project_id] ?? 0, parseInt(t.importance) || 1);
             if (!projectNames[t.project_id] && t.title) {
@@ -787,7 +795,8 @@
         }
 
         for (const [pid, info] of Object.entries(byProject)) {
-            const deadline = info.goal_deadline;
+            const deadline = projectDeadlineOf(info.tasks);
+            projectDeadlines[pid] = deadline;
             if (!deadline) { projectStates[pid] = 'normal'; projectTightness[pid] = 0; continue; }
 
             if (deadline < todayStr) { projectStates[pid] = 'overdue'; projectTightness[pid] = MAX_TIGHTNESS; continue; }
@@ -977,7 +986,7 @@
        in trouble. */
     const stateBadge = (pid) => {
         const s = projectStates[pid];
-        if (s === 'overdue') return ' <span class="badge badge-overdue">DEADLINE PASSED</span>';
+        if (s === 'overdue') return ` <span class="badge badge-overdue">DEADLINE PASSED ${esc(formatDate(projectDeadlines[pid]))}</span>`;
         if (s === 'at-risk') return ' <span class="badge badge-atrisk">AT RISK</span>';
         return '';
     };
@@ -1168,10 +1177,15 @@
         if (!hasCapacity(targetDateStr, t.duration, t.id)) return uiAlert(`${formatDate(targetDateStr)} is already at capacity!`);
 
         if (t.goal_deadline && targetDateStr > t.goal_deadline) {
-            const ok = await uiConfirm("Do you really want to do this - you set this date for a reason! Pushing this task will also push the project deadline back a day.", { title: "Past project deadline", okLabel: "Push anyway" });
+            const ok = await uiConfirm(`Do you really want to do this - you set this date for a reason! Pushing this task moves the project deadline out to ${formatDate(targetDateStr)}.`, { title: "Past project deadline", okLabel: "Push anyway" });
             if (!ok) return;
 
-            const newDeadline = addDays(t.goal_deadline, 1);
+            /* Move the deadline out far enough to cover the step's new date. Adding a single
+               day to the old deadline was right when a push only ever moved a step one day
+               past it, but an overdue step jumps straight to tomorrow — that left the
+               deadline stranded in the past while the step sat in the future, which is what
+               made a future-dated step report its project as past its deadline. */
+            const newDeadline = targetDateStr;
             const { error } = await dbCall(client.from('subtasks').update({ due_date: targetDateStr, goal_deadline: newDeadline, updated_at: new Date().toISOString() }).eq('id', id), "Push");
             if (error) return;
             if (t.project_id) {
@@ -1202,6 +1216,14 @@
         if (error || !templates) { uiAlert("Recurrence clone failed: " + (error?.message || "no rows")); return; }
         const newProjId = 'proj_' + Date.now();
 
+        /* One deadline for the whole cycle. Deriving it per row from that row's own baseline
+           let the steps fan out — a step added after the deadline was last moved carries a
+           different baseline from its siblings — and the new cycle would then have rows
+           disagreeing about when the project is due. */
+        const cycleBaseDeadline = projectDeadlineOf(
+            templates.map(t => ({ goal_deadline: t.base_goal_deadline || t.goal_deadline })));
+        const nextDeadline = cycleBaseDeadline ? shiftByRule(cycleBaseDeadline, task.recurrence_rule) : null;
+
         const newBatch = templates.map(t => {
             const { id, created_at, updated_at, ...data } = t;
             // Shift from the immutable baseline, not the live date, so a pushed/edited
@@ -1212,11 +1234,9 @@
                steps always have base_due_date set (on creation, and backfilled by the
                20260627 migration), so the column alone is the correct anchor. */
             const baseDue = t.base_due_date;
-            const baseDeadline = t.base_goal_deadline || t.goal_deadline || null;
             /* A Standby step stays dateless in the next cycle — back into the pool to be
                allocated again, rather than onto a day. */
             const nextDue = baseDue ? shiftByRule(baseDue, task.recurrence_rule) : null;
-            const nextDeadline = baseDeadline ? shiftByRule(baseDeadline, task.recurrence_rule) : null;
             return {
                 ...data,
                 due_date: nextDue,
@@ -1355,7 +1375,7 @@
         const tasks = masterTasks.filter(t => t.project_id === projectId);
         if (!tasks.length) { m.close(); return; }
         const currentName = projectNames[projectId] || '';
-        const deadline = tasks[0].goal_deadline || '';
+        const deadline = projectDeadlineOf(tasks) || '';
         const importance = tasks[0].importance;
         const recurRule = tasks[0].recurrence_rule || '';
         const impOpts = Array.from({length:10}, (_,i) => `<option value="${i+1}" ${importance == i+1 ? 'selected' : ''}>${i+1}</option>`).join('');
@@ -1587,7 +1607,11 @@
             }
 
             const updates = { updated_at: new Date().toISOString() };
-            if (newDeadline !== deadline) updates.goal_deadline = newDeadline;
+            /* Also rewrite when the rows disagree among themselves, so saving repairs a
+               project whose steps have drifted apart. */
+            if (newDeadline !== deadline || tasks.some(t => (t.goal_deadline || '') !== newDeadline)) {
+                updates.goal_deadline = newDeadline;
+            }
             if (newImportance !== importance) updates.importance = newImportance;
             if (newRecur !== recurRule) updates.recurrence_rule = newRecur || null;
 
@@ -1605,7 +1629,7 @@
         if (!tasks.length) return;
         const ref = tasks[0];
         const projName = projectNames[projectId] || '';
-        const deadline = ref.goal_deadline || '';
+        const deadline = projectDeadlineOf(tasks) || '';
         const today = localDateStr();
         const defaultDate = deadline && deadline < today ? deadline : today;
         const nextSort = tasks.reduce((mx, t) => Math.max(mx, t.sort_order ?? 0), 0) + 1;
@@ -1647,8 +1671,8 @@
                 due_date: date || null,
                 base_due_date: date || null,
                 importance: ref.importance,
-                goal_deadline: ref.goal_deadline || null,
-                base_goal_deadline: ref.goal_deadline || null,
+                goal_deadline: deadline || null,
+                base_goal_deadline: deadline || null,
                 project_id: projectId,
                 recurrence_rule: ref.recurrence_rule || null,
                 sort_order: nextSort
