@@ -205,14 +205,8 @@
             <div id="riskList"></div>
         </div>
 
-        <div class="card hidden" id="standbyCard">
-            <span class="section-title" style="margin-top:0;">🅿️ Standby</span>
-            <div style="font-weight:800; font-size:0.8rem; opacity:0.65; margin-bottom:12px;" id="standbySummary"></div>
-            <div id="standbyList"></div>
-            <small style="display:block; opacity:0.55; font-weight:700; margin-top:4px;">Ordered by importance, weighted by how much of its window each project has left — pressure builds on its own as a deadline nears, so a smaller job that's running out of time climbs above a bigger one that still has room. Your spare capacity is filled from the top of this list, in sequence — there's nothing to pick here on purpose.</small>
-        </div>
-
         <span class="section-title">📋 Active ToDo List</span>
+        <small id="todoHint" style="display:block; opacity:0.55; font-weight:700; margin:0 4px 10px;"></small>
         <div style="position:relative; margin-bottom:12px;">
             <input id="todoSearch" placeholder="🔎 Search active tasks…" oninput="renderToDo()" style="margin-bottom:0; padding-right:38px; width:100%;">
             <button type="button" id="todoSearchClear" onclick="document.getElementById('todoSearch').value=''; renderToDo();" style="display:none; position:absolute; right:6px; top:50%; transform:translateY(-50%); background:transparent; border:none; font-weight:900; font-size:1.1rem; cursor:pointer; padding:6px;">✕</button>
@@ -684,7 +678,6 @@
         streakCount = await computeStreak();
         renderDashboard();
         renderToDo();
-        renderStandby();
         renderArchived(completed || []);
         loadWeeklyReview();
     }
@@ -919,6 +912,47 @@
                 ((a.task.sort_order ?? 0) - (b.task.sort_order ?? 0)) ||
                 ((b.task.defer_count || 0) - (a.task.defer_count || 0))
             );
+    }
+
+    /* How far ahead to project Standby placements. Past this the answer is guesswork
+       anyway — capacity, deadlines and the ranking will all have moved by then. */
+    const FORECAST_DAYS = 180;
+
+    /* Run the morning sweep forward over the coming days to find which day each undated step
+       would land on if nothing changed. That projection is what positions a Standby step in
+       the list: not a guess, but the same allocation the app is going to make, so the list
+       reads as one plan instead of a schedule with a backlog stapled underneath it.
+       Returns { [taskId]: dateStr }; steps that never fit inside the horizon are left out. */
+    function forecastStandby() {
+        const projected = {};
+        if (!poolTasks.length) return projected;
+
+        const todayStr = localDateStr();
+        const load = {};
+        for (const t of datedTasks) load[t.due_date] = (load[t.due_date] || 0) + t.duration;
+
+        const queue = rankedStandby().map(r => r.task);
+        let cursor = todayStr;
+        for (let d = 0; d < FORECAST_DAYS && queue.length; d++) {
+            let remaining = Math.max(0, dayLimit(cursor) - (load[cursor] || 0));
+            const blocked = new Set();
+            for (let i = 0; i < queue.length && remaining > 0; ) {
+                const t = queue[i];
+                const key = t.project_id || `solo_${t.id}`;
+                /* Same rules the live sweep applies: sequence holds within a project, and a
+                   step deferred today can't come back today. */
+                if (blocked.has(key) || t.duration > remaining || (d === 0 && t.last_offered === todayStr)) {
+                    blocked.add(key);
+                    i++;
+                    continue;
+                }
+                projected[t.id] = cursor;
+                remaining -= t.duration;
+                queue.splice(i, 1);
+            }
+            cursor = addDays(cursor, 1);
+        }
+        return projected;
     }
 
     const stateBadge = (pid) => {
@@ -1840,20 +1874,52 @@
         const query = (document.getElementById('todoSearch')?.value || '').trim().toLowerCase();
         const clearBtn = document.getElementById('todoSearchClear');
         if (clearBtn) clearBtn.style.display = query ? 'block' : 'none';
-        /* Dated steps only; Standby has its own card so the two never blur together. */
-        const tasks = query ? datedTasks.filter(t => t.title.toLowerCase().includes(query)) : datedTasks;
+
+        /* One list. A Standby step has no date of its own, so it sits at the day the forecast
+           says it will actually be allocated — roughly the right place, marked as an estimate
+           rather than dressed up as a commitment. */
+        const projected = forecastStandby();
+        const UNPLACED = '9999-12-31';
+        const slot = (t) => t.due_date || projected[t.id] || UNPLACED;
+
+        const hint = document.getElementById('todoHint');
+        if (hint) {
+            const mins = poolTasks.reduce((s,t) => s + t.duration, 0);
+            const one = poolTasks.length === 1;
+            hint.textContent = poolTasks.length
+                ? `${poolTasks.length} of these ${one ? 'is' : 'are'} 🅿️ Standby (${mins}m) — no date of ${one ? 'its' : 'their'} own, shown at the day ${one ? "it's" : "they're"} forecast to land (≈).`
+                : '';
+        }
+
+        const all = [...datedTasks, ...poolTasks].sort((a,b) => {
+            const sa = slot(a), sb = slot(b);
+            return (sa < sb ? -1 : sa > sb ? 1 : 0) ||
+                /* A committed date outranks a projection landing on the same day. */
+                ((a.due_date ? 0 : 1) - (b.due_date ? 0 : 1)) ||
+                (b.importance - a.importance) ||
+                ((a.sort_order ?? 0) - (b.sort_order ?? 0));
+        });
+
+        const tasks = query ? all.filter(t => t.title.toLowerCase().includes(query)) : all;
         if (query && tasks.length === 0) {
             document.getElementById('masterToDo').innerHTML = `<p style="opacity:0.6; font-weight:700; text-align:center;">No matches for "${esc(query)}"</p>`;
             return;
         }
         document.getElementById('masterToDo').innerHTML = tasks.map(t => {
             const impClass = `imp-${Math.min(10, Math.max(1, parseInt(t.importance) || 1))}`;
+            const standby = !t.due_date;
+            const dc = t.defer_count || 0;
+            const when = standby
+                ? (projected[t.id] ? `≈ ${formatDate(projected[t.id])}` : 'no gap in sight')
+                : formatDate(t.due_date);
+            const mark = standby ? ` <span class="badge">🅿️ STANDBY</span>`
+                : t.auto_placed ? ` <span class="badge">🅿️ ALLOCATED</span>` : '';
             return `
             <div class="todo-item${stateRowClass(t.project_id)}">
                 <div class="imp-chip ${impClass}">${esc(t.importance)}</div>
                 <div style="flex:1; min-width:0;">
-                    <b>${esc(t.title)}</b>${stateBadge(t.project_id)}${t.auto_placed ? ` <span class="badge">🅿️ ALLOCATED</span>` : ''}<br>
-                    <small>${formatDate(t.due_date)} • ${t.duration}m</small>
+                    <b>${esc(t.title)}</b><br>
+                    <small>${esc(when)} • ${t.duration}m${dc ? ` · passed over ${dc}×` : ''}</small>${stateBadge(t.project_id)}${mark}${dc >= DODGED_THRESHOLD ? ` <span class="badge badge-overdue">DODGED</span>` : ''}
                 </div>
                 <div style="display:flex; gap:6px; align-items:center;">
                     ${t.auto_placed ? `<button class="btn-edit" title="Back to Standby" data-id="${esc(t.id)}" data-act="defer">🅿️</button>` : ''}
@@ -1861,69 +1927,6 @@
                     <button class="btn-edit" data-id="${esc(t.id)}" data-act="edit">✎</button>
                     <button class="btn-done" data-id="${esc(t.id)}" data-act="complete">✓</button>
                 </div>
-            </div>`;
-        }).join('');
-    }
-
-    /* Grouped by project, projects ordered by deadline pressure, steps in sequence order.
-       Read-only: seeing the whole backlog is useful, choosing from it is the thing to avoid. */
-    function renderStandby() {
-        const card = document.getElementById('standbyCard');
-        if (!poolTasks.length) { card.classList.add('hidden'); return; }
-        card.classList.remove('hidden');
-
-        const total = poolTasks.reduce((s,t) => s + t.duration, 0);
-        document.getElementById('standbySummary').innerText =
-            `${poolTasks.length} step${poolTasks.length===1?'':'s'} · ${total}m of work waiting for a gap`;
-
-        const groups = {};
-        for (const t of poolTasks) {
-            const key = t.project_id || `solo_${t.id}`;
-            (groups[key] = groups[key] || []).push(t);
-        }
-
-        const ordered = Object.entries(groups)
-            .map(([pid, tasks]) => ({
-                pid,
-                tasks: tasks.slice().sort((a,b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
-                tightness: projectTightness[pid] ?? 0,
-                importance: projectImportance[pid] ?? tasks[0].importance,
-                priority: projectPriority[pid] ?? priorityScore(tasks[0].importance, 0),
-                deadline: tasks[0].goal_deadline
-            }))
-            .sort((a,b) => (b.priority - a.priority) || (b.tightness - a.tightness));
-
-        document.getElementById('standbyList').innerHTML = ordered.map(g => {
-            const name = projectNames[g.pid] || splitTitle(g.tasks[0].title).proj || 'Unfiled';
-            const overdue = g.deadline && g.deadline < localDateStr();
-            const pressure = overdue ? 'DEADLINE PASSED'
-                : g.tightness >= 1 ? "WON'T FIT"
-                /* Don't round a distant deadline down to a flat "0% of window". */
-                : g.tightness < 0.01 ? 'LOADS OF ROOM'
-                : `${Math.round(g.tightness * 100)}% of window`;
-            const pressureCls = overdue ? 'badge-overdue' : g.tightness >= 1 ? 'badge-atrisk' : '';
-
-            const steps = g.tasks.map((t, i) => {
-                const dc = t.defer_count || 0;
-                return `<div class="day-task">
-                    <span class="queue-pos"${i === 0 ? '' : ' style="opacity:0.3;"'}>${i === 0 ? 'NEXT' : i + 1}</span>
-                    <div style="flex:1; min-width:0;">
-                        <b style="font-size:0.82rem;">${esc(splitTitle(t.title).name)}</b><br>
-                        <small style="opacity:0.6;">${t.duration}m${dc ? ` · passed over ${dc}×` : ''}</small>
-                    </div>
-                    ${dc >= DODGED_THRESHOLD ? `<span class="badge badge-overdue">DODGED</span>` : ''}
-                </div>`;
-            }).join('');
-
-            const impCls = `imp-${Math.min(10, Math.max(1, parseInt(g.importance) || 1))}`;
-            return `<div style="margin-bottom:16px;">
-                <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
-                    <div class="imp-chip ${impCls}" style="width:24px;height:24px;font-size:0.7rem;">${esc(g.importance)}</div>
-                    <b style="font-size:0.9rem;">${esc(name)}</b>
-                    <small style="opacity:0.6;">due ${formatDate(g.deadline)}</small>
-                    <span class="badge ${pressureCls}">${pressure}</span>
-                </div>
-                ${steps}
             </div>`;
         }).join('');
     }
