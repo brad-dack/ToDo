@@ -277,9 +277,15 @@
             </div>
             <span class="field-label">Manual entry</span>
             <input id="stageTitle" placeholder="Action Title">
-            <div style="display:grid; grid-template-columns: 35% 1fr; gap:12px; align-items:end;">
+            <div style="display:grid; grid-template-columns: 30% 1fr; gap:12px; align-items:end;">
                 <div style="min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="stageMins" max="15" value="15"></div>
-                <div style="min-width:0;"><label class="field-label">Action Date (optional)</label><input type="date" id="stageDate" class="full-date"></div>
+                <div style="min-width:0;">
+                    <label class="field-label">Action Date (optional)</label>
+                    <div style="display:flex; gap:6px; margin-bottom:12px;">
+                        <input type="date" id="stageDate" class="full-date" style="flex:1; margin-bottom:0; min-width:0;">
+                        <button type="button" class="btn-edit" onclick="document.getElementById('stageDate').value='';" title="Clear date — send to Standby">✕</button>
+                    </div>
+                </div>
             </div>
             <small style="display:block; opacity:0.65; font-weight:700; margin:-4px 0 12px;">Leave the date blank to send a step to 🅿️ Standby — it still counts toward the project deadline, and gets allocated to spare capacity automatically.</small>
             <button onclick="addToStaging()" style="background:var(--green); color:var(--ink); width:100%; height:50px; border-radius:12px; font-weight:900; margin-bottom:15px; border:3px solid var(--ink); cursor:pointer; box-shadow:var(--shadow); font-family:inherit;">+ Add to Sequence</button>
@@ -476,6 +482,24 @@
             const m = openModal(node, { dismissable: false });
             node.querySelector('.modal-cancel').onclick = () => { m.close(); resolve(false); };
             node.querySelector('.submit-btn').onclick = () => { m.close(); resolve(true); };
+        });
+    }
+
+    /* ---------- Clearable date field ----------
+       A native date input on mobile only offers the picker, which can set a date but
+       never unset one — so a step could be given a date and then never sent back to
+       Standby. Every step date field pairs the input with an explicit clear button. */
+    const dateFieldHtml = (id, value, max, label = 'Date (blank = 🅿️ Standby)') => `
+        <label class="field-label">${esc(label)}</label>
+        <div style="display:flex; gap:6px; margin-bottom:12px;">
+            <input type="date" id="${esc(id)}" class="full-date" style="flex:1; margin-bottom:0; min-width:0;" value="${esc(value || '')}"${max ? ` max="${esc(max)}"` : ''}>
+            <button type="button" class="btn-edit" data-clear-date="${esc(id)}" style="width:40px; height:50px;" title="Clear date — send to Standby">✕</button>
+        </div>`;
+
+    function wireDateClears(node) {
+        node.querySelectorAll('[data-clear-date]').forEach(b => b.onclick = () => {
+            const input = node.querySelector(`#${b.dataset.clearDate}`);
+            if (input) input.value = '';
         });
     }
 
@@ -928,15 +952,16 @@
             <h3 class="modal-title">Edit Action</h3>
             <label class="field-label">Title</label>
             <input id="edit-staged-title" value="${esc(t.title)}">
-            <div style="display:grid; grid-template-columns: 38% 1fr; gap:12px;">
+            <div style="display:grid; grid-template-columns: 30% 1fr; gap:12px;">
                 <div style="min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="edit-staged-mins" max="15" value="${esc(t.duration)}"></div>
-                <div style="min-width:0;"><label class="field-label">Date (blank = Standby)</label><input type="date" id="edit-staged-date" value="${esc(t.due_date || '')}" max="${esc(activeGoal.date)}"></div>
+                <div style="min-width:0;">${dateFieldHtml('edit-staged-date', t.due_date, activeGoal.date)}</div>
             </div>
             <div class="modal-actions">
                 <button class="modal-cancel">Cancel</button>
                 <button class="submit-btn" id="edit-staged-save" style="flex:2;">Save</button>
             </div>`;
         const m = openModal(node);
+        wireDateClears(node);
         node.querySelector('.modal-cancel').onclick = m.close;
         node.querySelector('#edit-staged-save').onclick = () => {
             const title = node.querySelector('#edit-staged-title').value.trim();
@@ -1117,9 +1142,9 @@
             <h3 class="modal-title">Edit Action</h3>
             <label class="field-label">Title</label>
             <input id="edit-title" value="${esc(t.title)}">
-            <div style="display:grid; grid-template-columns: 38% 1fr; gap:12px;">
+            <div style="display:grid; grid-template-columns: 30% 1fr; gap:12px;">
                 <div style="min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="edit-mins" max="15" value="${esc(t.duration)}"></div>
-                <div style="min-width:0;"><label class="field-label">Date (blank = Standby)</label><input type="date" id="edit-date" value="${esc(t.due_date)}"${t.goal_deadline ? ` max="${esc(t.goal_deadline)}"` : ''}></div>
+                <div style="min-width:0;">${dateFieldHtml('edit-date', t.due_date, t.goal_deadline)}</div>
             </div>
             <label class="field-label">Importance (applies to whole project)</label>
             <select id="edit-imp">${impOpts}</select>
@@ -1130,6 +1155,7 @@
                 <button class="submit-btn" id="edit-save" style="flex:2;">Save</button>
             </div>`;
         const m = openModal(node);
+        wireDateClears(node);
         node.querySelector('.modal-cancel').onclick = m.close;
         if (t.project_id) {
             node.querySelector('#edit-project-btn').onclick = () => {
@@ -1178,10 +1204,38 @@
         };
     }
 
+    /* Edit Project lists steps in their sequence (sort_order) by default. Dates drift out
+       of sequence on their own — Smart Reschedule, Recovery Plans, "Push →" and the morning
+       Standby sweep all move a single step's day without touching the sequence — so a
+       date-ordered list reads as scrambled. Sequence is the stable thing, and it is what
+       Standby allocation actually follows, so it is what's editable here. */
+    let editProjectOrder = 'sequence';
+    let editProjectSortable = null;
+
     function editProject(projectId) {
+        editProjectOrder = 'sequence';
         const node = document.createElement('div');
         const m = openModal(node);
+        const close = m.close;
+        m.close = () => { destroyProjectSortable(); close(); };
         renderEditProjectBody(projectId, node, m);
+    }
+
+    function destroyProjectSortable() {
+        if (editProjectSortable) { editProjectSortable.destroy(); editProjectSortable = null; }
+    }
+
+    /* Renumber a project's steps 0..n-1 in the given order. */
+    async function persistStepOrder(ids) {
+        const stamp = new Date().toISOString();
+        for (let i = 0; i < ids.length; i++) {
+            const t = masterTasks.find(x => x.id == ids[i]);
+            if (t && (t.sort_order ?? 0) === i) continue;
+            const { error } = await dbCall(client.from('subtasks').update({ sort_order: i, updated_at: stamp }).eq('id', ids[i]), "Re-order steps");
+            if (error) return false;
+            if (t) t.sort_order = i;
+        }
+        return true;
     }
 
     function renderEditProjectBody(projectId, node, m) {
@@ -1194,25 +1248,43 @@
         const impOpts = Array.from({length:10}, (_,i) => `<option value="${i+1}" ${importance == i+1 ? 'selected' : ''}>${i+1}</option>`).join('');
         const recurOpts = `<option value="">None</option>` + VALID_RULES.map(r => `<option ${recurRule === r ? 'selected' : ''}>${r}</option>`).join('');
 
+        const bySequence = (a,b) => ((a.sort_order ?? 0) - (b.sort_order ?? 0)) || (a.id > b.id ? 1 : a.id < b.id ? -1 : 0);
         /* Dated steps in date order, then Standby steps in sequence order. */
-        const sorted = [...tasks].sort((a,b) =>
+        const byDate = (a,b) =>
             ((a.due_date ? 0 : 1) - (b.due_date ? 0 : 1)) ||
             (a.due_date && b.due_date ? new Date(a.due_date) - new Date(b.due_date) : 0) ||
-            ((a.sort_order ?? 0) - (b.sort_order ?? 0))
-        );
-        const stepsHtml = sorted.map(t => {
+            bySequence(a,b);
+
+        const seqMode = editProjectOrder === 'sequence';
+        const sorted = [...tasks].sort(seqMode ? bySequence : byDate);
+
+        /* Flag the drift rather than silently re-sorting around it — "why are my steps in
+           a strange order" is answerable, and the answer is that the dates moved. */
+        const datedSteps = tasks.filter(t => t.due_date);
+        const dateOrdered = [...datedSteps].sort(byDate);
+        const outOfSync = [...datedSteps].sort(bySequence).some((t, i) => t.id !== dateOrdered[i].id);
+
+        const stepsHtml = sorted.map((t, i) => {
             const s = splitTitle(t.title);
             const ic = `imp-${Math.min(10, Math.max(1, parseInt(t.importance)||1))}`;
-            return `<div class="day-task">
+            return `<div class="day-task" data-id="${esc(t.id)}">
+                ${seqMode ? `<span class="drag-handle" style="cursor:grab; opacity:0.5; font-size:1.1rem; touch-action:none;">☰</span>` : ''}
+                <span class="queue-pos" style="flex-shrink:0;">${i + 1}</span>
                 <div class="imp-chip ${ic}" style="width:28px;height:28px;font-size:0.75rem;">${esc(t.importance)}</div>
                 <div style="flex:1;min-width:0;">
                     <b style="font-size:0.82rem;">${esc(s.name)}</b><br>
-                    <small style="opacity:0.6;">${t.due_date ? formatDate(t.due_date) : '🅿️ Standby'} · ${t.duration}m</small>
+                    <small style="opacity:0.6;">${t.due_date ? formatDate(t.due_date) : '🅿️ Standby'} · ${t.duration}m${t.auto_placed ? ' · allocated' : ''}</small>
                 </div>
                 <button class="btn-edit ps-edit" data-id="${esc(t.id)}">✎</button>
                 <button class="btn-edit ps-del" data-id="${esc(t.id)}" style="color:var(--red);">✕</button>
             </div>`;
         }).join('');
+
+        const orderNote = seqMode
+            ? (outOfSync
+                ? `<small style="display:block; opacity:0.7; font-weight:700; margin-bottom:8px;">⚠️ Dates no longer follow this sequence — Smart Reschedule, pushes and the Standby sweep move steps day to day. Drag ☰ to re-order.</small>`
+                : `<small style="display:block; opacity:0.55; font-weight:700; margin-bottom:8px;">Drag ☰ to re-order. Standby allocates a project's steps in this order.</small>`)
+            : `<small style="display:block; opacity:0.55; font-weight:700; margin-bottom:8px;">Showing date order. Switch to sequence to re-order steps.</small>`;
 
         node.innerHTML = `
             <button class="modal-close ep-close-x">✕</button>
@@ -1229,16 +1301,67 @@
                 <button class="modal-cancel" id="proj-cancel">Cancel</button>
                 <button class="submit-btn" id="proj-save" style="flex:2;">Save</button>
             </div>
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
                 <span class="field-label" style="display:block; margin:0;">Steps (${tasks.length})</span>
-                <button type="button" class="btn-edit" id="proj-add-step" style="font-size:0.8rem;">＋ Add Step</button>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <button type="button" class="btn-bulk" id="proj-order-toggle">${seqMode ? '📅 By date' : '↕️ Sequence'}</button>
+                    <button type="button" class="btn-edit" id="proj-add-step" style="font-size:1.1rem;" title="Add step">＋</button>
+                </div>
             </div>
-            <div>${stepsHtml}</div>
+            ${orderNote}
+            <div id="proj-steps">${stepsHtml}</div>
+            ${seqMode && outOfSync ? `<button type="button" class="btn-bulk" id="proj-match-dates" style="margin-top:4px;">⇅ Match sequence to dates</button>` : ''}
+            <button type="button" class="btn-bulk" id="proj-clear-dates" style="margin-top:12px; background:white;">🅿️ Clear All Step Dates</button>
             <button type="button" class="btn-bulk" id="proj-clone" style="margin-top:12px;">📋 Clone Into New Project</button>
             <button type="button" class="submit-btn" id="proj-delete" style="background:var(--red); color:white; margin-top:12px;">🗑️ Delete Whole Project</button>`;
 
         node.querySelector('.ep-close-x').onclick = m.close;
         node.querySelector('#proj-cancel').onclick = m.close;
+
+        node.querySelector('#proj-order-toggle').onclick = () => {
+            editProjectOrder = seqMode ? 'date' : 'sequence';
+            renderEditProjectBody(projectId, node, m);
+        };
+
+        destroyProjectSortable();
+        if (seqMode) {
+            editProjectSortable = new Sortable(node.querySelector('#proj-steps'), {
+                animation: 150,
+                handle: '.drag-handle',
+                onEnd: async (evt) => {
+                    if (evt.oldIndex === evt.newIndex) return;
+                    const ids = sorted.map(t => t.id);
+                    ids.splice(evt.newIndex, 0, ids.splice(evt.oldIndex, 1)[0]);
+                    await persistStepOrder(ids);
+                    await refresh();
+                    renderEditProjectBody(projectId, node, m);
+                }
+            });
+        }
+
+        const matchBtn = node.querySelector('#proj-match-dates');
+        if (matchBtn) matchBtn.onclick = async () => {
+            await persistStepOrder([...tasks].sort(byDate).map(t => t.id));
+            await refresh();
+            renderEditProjectBody(projectId, node, m);
+        };
+
+        /* Bulk return to Standby: the whole project goes back in the pool and gets
+           re-allocated day by day, instead of clearing a dozen dates one modal at a time. */
+        node.querySelector('#proj-clear-dates').onclick = async () => {
+            if (!datedSteps.length) return uiAlert("None of these steps have a date — they're all in Standby already.");
+            const ok = await uiConfirm(
+                `${datedSteps.length} step${datedSteps.length === 1 ? '' : 's'} will lose their date and go back to 🅿️ Standby, to be allocated to spare capacity each morning in sequence order. The project deadline is unchanged.`,
+                { title: 'Clear all step dates?', okLabel: 'Clear dates' }
+            );
+            if (!ok) return;
+            const { error } = await dbCall(client.from('subtasks').update({
+                due_date: null, auto_placed: false, updated_at: new Date().toISOString()
+            }).eq('project_id', projectId).eq('completed', false), "Clear step dates");
+            if (error) return;
+            await refresh();
+            renderEditProjectBody(projectId, node, m);
+        };
 
         node.querySelectorAll('.ps-edit').forEach(b => b.onclick = () => {
             editTask(b.dataset.id, () => renderEditProjectBody(projectId, node, m));
@@ -1325,15 +1448,16 @@
             <h3 class="modal-title">Add Step</h3>
             <label class="field-label">Title</label>
             <input id="add-step-title" placeholder="What needs doing?">
-            <div style="display:grid; grid-template-columns: 38% 1fr; gap:12px;">
+            <div style="display:grid; grid-template-columns: 30% 1fr; gap:12px;">
                 <div style="min-width:0;"><label class="field-label">Mins (15 max)</label><input type="number" id="add-step-mins" max="15" value="15"></div>
-                <div style="min-width:0;"><label class="field-label">Date (blank = Standby)</label><input type="date" id="add-step-date" value="${esc(defaultDate)}"${deadline ? ` max="${esc(deadline)}"` : ''}></div>
+                <div style="min-width:0;">${dateFieldHtml('add-step-date', defaultDate, deadline)}</div>
             </div>
             <div class="modal-actions">
                 <button class="modal-cancel">Cancel</button>
                 <button class="submit-btn" id="add-step-save" style="flex:2;">Add</button>
             </div>`;
         const m = openModal(node);
+        wireDateClears(node);
         node.querySelector('.modal-cancel').onclick = m.close;
         node.querySelector('#add-step-save').onclick = async () => {
             const title = node.querySelector('#add-step-title').value.trim();
